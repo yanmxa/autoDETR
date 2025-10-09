@@ -12,10 +12,7 @@ import torch
 import torch.nn as nn
 import math
 from torchvision.models import resnet50, ResNet50_Weights
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
-from rich import box
+from detr.utils import display_model_info, display_checkpoint_loaded
 
 
 def _get_1d_sincos_pos_embed(length: int, dim: int, temperature: float = 10000.0, device=None):
@@ -202,78 +199,22 @@ class DETR(nn.Module):
         self.norm_src = nn.LayerNorm(hidden_dim)
         self.norm_tgt = nn.LayerNorm(hidden_dim)
 
-        # Display model info
+        # Display model info using centralized display function
         if verbose:
-            self._display_model_info()
+            total_params = sum(p.numel() for p in self.parameters())
+            trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
 
-    def _display_model_info(self):
-        """Display model architecture information using rich."""
-        console = Console()
-
-        console.print()
-        console.print(Panel.fit(
-            "[bold cyan]DETR Model Initialized[/bold cyan]",
-            border_style="cyan",
-            box=box.DOUBLE
-        ))
-
-        # Architecture table
-        arch_table = Table(
-            title="🏗️  Model Architecture",
-            box=box.ROUNDED,
-            show_header=True,
-            header_style="bold magenta"
-        )
-        arch_table.add_column("Component", style="cyan", no_wrap=True)
-        arch_table.add_column("Configuration", style="yellow")
-
-        arch_table.add_row("Backbone", "ResNet-50 (ImageNet pretrained)")
-        arch_table.add_row("Hidden Dimension", str(self.hidden_dim))
-        arch_table.add_row("Attention Heads", str(self.nheads))
-        arch_table.add_row("Encoder Layers", str(self.num_encoder_layers))
-        arch_table.add_row("Decoder Layers", str(self.num_decoder_layers))
-        arch_table.add_row("Dropout Rate", f"{self.dropout:.2f}")
-
-        console.print(arch_table)
-
-        # Detection configuration
-        det_table = Table(
-            title="🎯 Detection Configuration",
-            box=box.ROUNDED,
-            show_header=True,
-            header_style="bold green"
-        )
-        det_table.add_column("Parameter", style="cyan")
-        det_table.add_column("Value", style="yellow", justify="right")
-
-        det_table.add_row("Number of Classes", str(self.num_classes))
-        det_table.add_row("Object Queries", str(self.num_queries))
-        det_table.add_row("Output Classes", f"{self.num_classes + 1} (+ background)")
-
-        console.print(det_table)
-
-        # Parameter count
-        total_params = sum(p.numel() for p in self.parameters())
-        trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
-
-        param_table = Table(
-            title="📊 Parameters",
-            box=box.ROUNDED,
-            show_header=True,
-            header_style="bold blue"
-        )
-        param_table.add_column("Type", style="cyan")
-        param_table.add_column("Count", style="yellow", justify="right")
-
-        param_table.add_row("Total Parameters", f"{total_params:,}")
-        param_table.add_row("Trainable Parameters", f"{trainable_params:,}")
-        param_table.add_row(
-            "Model Size (FP32)",
-            f"{total_params * 4 / (1024**2):.2f} MB"
-        )
-
-        console.print(param_table)
-        console.print()
+            display_model_info(
+                num_classes=self.num_classes,
+                hidden_dim=self.hidden_dim,
+                nheads=self.nheads,
+                num_encoder_layers=self.num_encoder_layers,
+                num_decoder_layers=self.num_decoder_layers,
+                num_queries=self.num_queries,
+                dropout=self.dropout,
+                total_params=total_params,
+                trainable_params=trainable_params
+            )
 
     def forward(self, inputs):
         """
@@ -367,33 +308,13 @@ class DETR(nn.Module):
             >>> model = DETR(num_classes=91)
             >>> model.load_pretrained('detr_checkpoint.pth')
         """
-        console = Console()
-
         try:
             state_dict = torch.load(checkpoint_path, map_location='cpu')
             self.load_state_dict(state_dict)
-
-            console.print()
-            console.print(Panel(
-                f"[bold green]✓[/bold green] Successfully loaded checkpoint from:\n"
-                f"[cyan]{checkpoint_path}[/cyan]",
-                title="✅ Checkpoint Loaded",
-                border_style="green",
-                box=box.ROUNDED
-            ))
-            console.print()
+            display_checkpoint_loaded(checkpoint_path, success=True)
 
         except Exception as e:
-            console.print()
-            console.print(Panel(
-                f"[bold red]✗[/bold red] Failed to load checkpoint:\n"
-                f"[red]{str(e)}[/red]\n\n"
-                f"Path: [cyan]{checkpoint_path}[/cyan]",
-                title="❌ Loading Failed",
-                border_style="red",
-                box=box.ROUNDED
-            ))
-            console.print()
+            display_checkpoint_loaded(checkpoint_path, success=False, error_msg=str(e))
             raise
 
 

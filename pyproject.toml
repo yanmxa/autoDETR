@@ -49,8 +49,6 @@ dev = [
 [project.scripts]
 detr-collect = "detr.tools.collect_images:main"
 detr-train = "detr.train:main"
-detr-eval = "detr.eval:main"
-detr-infer = "detr.inference:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -12,11 +12,12 @@ from datetime import datetime
 from typing import List
 
 from rich.console import Console
-from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
-from rich.table import Table
-from rich.live import Live
-from rich import box
+from detr.utils import (
+    display_capture_banner,
+    display_capture_session_info,
+    display_capture_session_summary,
+    create_capture_progress
+)
 
 
 class CaptureImages:
@@ -36,8 +37,8 @@ class CaptureImages:
         self.path = path
         self.classes = classes
 
-        # Print banner
-        self._print_banner()
+        # Display banner using centralized function
+        display_capture_banner()
 
         # Verify camera connection
         if not self.cap.isOpened():
@@ -49,16 +50,6 @@ class CaptureImages:
         # Ensure output directory exists
         os.makedirs(self.path, exist_ok=True)
         self.console.print(f"[blue]ℹ[/blue] Output directory: {self.path}")
-
-    def _print_banner(self):
-        """Print beautiful banner at startup"""
-        banner = Panel.fit(
-            "[bold cyan]IMAGE CAPTURE SYSTEM v1.0[/bold cyan]\n"
-            "[dim]Sign Language Dataset Collection[/dim]",
-            border_style="cyan",
-            box=box.DOUBLE
-        )
-        self.console.print(banner)
 
     def capture(self, class_name: str) -> bool:
         """
@@ -118,31 +109,20 @@ class CaptureImages:
             sleep_time: Delay between captures in seconds
             num_images: Number of images to capture per class
         """
-        # Display session information
-        self._print_session_info(num_images, sleep_time)
+        # Display session information using centralized function
+        display_capture_session_info(self.classes, num_images, sleep_time)
 
         total_captured = 0
-        start_time = time.time()
 
-        for class_idx, img_class in enumerate(self.classes):
+        for img_class in self.classes:
             self.console.print(
                 f"\n[bold magenta]┌─ Starting capture for: {img_class} ({num_images} images)[/bold magenta]"
             )
 
             class_captured = 0
 
-            # Create progress bar for this class
-            with Progress(
-                SpinnerColumn(),
-                TextColumn("[bold blue]{task.description}"),
-                BarColumn(complete_style="green", finished_style="bold green"),
-                TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-                TextColumn("•"),
-                TextColumn("{task.completed}/{task.total}"),
-                TextColumn("•"),
-                TimeElapsedColumn(),
-                console=self.console
-            ) as progress:
+            # Create progress bar using centralized function
+            with create_capture_progress() as progress:
                 task = progress.add_task(f"Capturing {img_class}", total=num_images)
 
                 for idx in range(num_images):
@@ -171,40 +151,13 @@ class CaptureImages:
             )
             self.console.print(f"[magenta]└─ {img_class} complete[/magenta]\n")
 
-        # Show session completion
-        self._print_session_summary(total_captured, len(self.classes))
+        # Display session completion using centralized function
+        display_capture_session_summary(total_captured, len(self.classes))
 
         # Clean up
         self.cap.release()
         cv2.destroyAllWindows()
         self.console.print("[blue]ℹ[/blue] Camera released and windows closed")
-
-    def _print_session_info(self, num_images: int, sleep_time: int):
-        """Print capture session start information"""
-        table = Table(title="Capture Session Configuration", box=box.ROUNDED, border_style="cyan")
-        table.add_column("Parameter", style="cyan", no_wrap=True)
-        table.add_column("Value", style="bold")
-
-        table.add_row("Classes", ", ".join(self.classes))
-        table.add_row("Images per class", str(num_images))
-        table.add_row("Interval", f"{sleep_time}s")
-        table.add_row("Total images", str(num_images * len(self.classes)))
-
-        self.console.print()
-        self.console.print(table)
-        self.console.print()
-
-    def _print_session_summary(self, total_captured: int, num_classes: int):
-        """Print session completion summary"""
-        summary = Panel(
-            f"[bold green]✓[/bold green] Total images captured: [bold]{total_captured}[/bold]\n"
-            f"[bold green]✓[/bold green] Classes processed: [bold]{num_classes}[/bold]",
-            title="[bold]Session Complete[/bold]",
-            border_style="green",
-            box=box.DOUBLE
-        )
-        self.console.print()
-        self.console.print(summary)
 
 
 def main():

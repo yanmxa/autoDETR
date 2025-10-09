@@ -1,203 +1,311 @@
 """
-Training script for sign detection model
+DETR Training Script
+
+This script trains the DETR (Detection Transformer) model for object detection.
+Uses rich for beautiful and informative console output.
 """
 
-import argparse
-import yaml
+import sys
+import torch
+from torch import optim
+from torch.utils.data import DataLoader
 from pathlib import Path
 
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, random_split
-from torch.utils.tensorboard import SummaryWriter
 from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
 
-from sign_detection.models import SignDetectionModel
-from sign_detection.data import SignDataset, get_train_transforms, get_val_transforms
-from sign_detection.utils import setup_logger, calculate_accuracy
+from detr.data.dataset import DETRDataset, collate_fn
+from detr.model import DETR
+from detr.loss import DETRLoss, HungarianMatcher, compute_total_loss
+from detr.utils import (
+    display_training_header,
+    create_training_progress,
+    display_checkpoint_saved,
+    display_training_complete,
+    display_training_error,
+    display_info_message
+)
 
 
-def train_one_epoch(
-    model: nn.Module,
-    dataloader: DataLoader,
-    criterion: nn.Module,
-    optimizer: optim.Optimizer,
-    device: torch.device,
-    epoch: int,
-    writer: SummaryWriter,
-    console: Console
-) -> float:
-    """Train for one epoch"""
+def get_training_config():
+    """
+    Configure training parameters.
+
+    Returns:
+        dict: Training configuration with all hyperparameters
+
+    Notes:
+        - Set 'pretrained_path' to None to skip loading pretrained weights
+        - Set 'checkpoint_dir' to None to skip saving checkpoints
+        - Adjust 'save_interval' to control checkpoint frequency
+    """
+    config = {
+        # Data paths
+        'train_data_dir': 'data/train',
+        'test_data_dir': 'data/test',
+
+        # Model configuration
+        'num_classes': 3,
+        'num_queries': 100,
+        'num_encoder_layers': 1,
+        'num_decoder_layers': 1,
+        'nheads': 8,
+        'hidden_dim': 256,
+        'dropout': 0.1,
+
+        # Training hyperparameters
+        'epochs': 100,
+        'batch_size': 4,
+        'learning_rate': 1e-5,
+
+        # Loss weights
+        'loss_weights': {
+            'class_weighting': 1.0,
+            'bbox_weighting': 5.0,
+            'giou_weighting': 2.0
+        },
+        'eos_coef': 0.1,  # Weight for "no-object" class
+
+        # Optimizer and scheduler
+        'optimizer': 'Adam',  # 'Adam' or 'AdamW'
+        'scheduler': 'CosineAnnealingWarmRestarts',
+        'T_0': None,  # Will be set to len(train_dataloader) * 30 if None
+        'T_mult': 2,
+
+        # Checkpoint configuration
+        'pretrained_path': None,  # Set to path string to load pretrained model, None to skip
+        'checkpoint_dir': 'checkpoints',  # Directory to save checkpoints, None to skip
+        'save_interval': 10,  # Save checkpoint every N epochs
+
+        # Device
+        'device': 'cuda' if torch.cuda.is_available() else 'cpu'
+    }
+
+    return config
+
+
+
+
+def train_one_epoch(model, dataloader, criterion, optimizer, device, progress, task_id):
+    """Train for one epoch."""
     model.train()
-    running_loss = 0.0
-    running_acc = 0.0
+    epoch_loss = 0.0
+    num_batches = len(dataloader)
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[bold blue]{task.description}"),
-        BarColumn(),
-        TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
-        console=console
-    ) as progress:
-        task = progress.add_task(f"Epoch {epoch}", total=len(dataloader))
+    for batch_idx, (images, targets) in enumerate(dataloader):
+        # Move to device
+        images = images.to(device)
+        targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
-        for batch_idx, (images, labels) in enumerate(dataloader):
-            images, labels = images.to(device), labels.to(device)
+        # Forward pass
+        predictions = model(images)
+
+        # Compute loss
+        loss_dict = criterion(predictions, targets)
+        total_loss = compute_total_loss(loss_dict, criterion.weight_dict)
+
+        # Backward pass
+        optimizer.zero_grad()
+        total_loss.backward()
+        optimizer.step()
+
+        # Accumulate loss
+        epoch_loss += total_loss.item()
+
+        # Update progress
+        progress.update(task_id, advance=1)
+
+    return epoch_loss / num_batches
+
+
+def evaluate(model, dataloader, criterion, device):
+    """Evaluate model on test set."""
+    model.eval()
+    epoch_loss = 0.0
+    num_batches = len(dataloader)
+
+    with torch.no_grad():
+        for images, targets in dataloader:
+            # Move to device
+            images = images.to(device)
+            targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
 
             # Forward pass
-            optimizer.zero_grad()
-            outputs = model(images)
-            loss = criterion(outputs, labels)
+            predictions = model(images)
 
-            # Backward pass
-            loss.backward()
-            optimizer.step()
+            # Compute loss
+            loss_dict = criterion(predictions, targets)
+            total_loss = compute_total_loss(loss_dict, criterion.weight_dict)
 
-            # Metrics
-            acc = calculate_accuracy(outputs, labels)
-            running_loss += loss.item()
-            running_acc += acc
+            # Accumulate loss
+            epoch_loss += total_loss.item()
 
-            # Update progress
-            progress.update(task, advance=1)
-
-            # Log to tensorboard
-            global_step = epoch * len(dataloader) + batch_idx
-            writer.add_scalar('Train/Loss_Step', loss.item(), global_step)
-            writer.add_scalar('Train/Acc_Step', acc, global_step)
-
-    avg_loss = running_loss / len(dataloader)
-    avg_acc = running_acc / len(dataloader)
-
-    return avg_loss, avg_acc
+    return epoch_loss / num_batches
 
 
-@torch.no_grad()
-def validate(
-    model: nn.Module,
-    dataloader: DataLoader,
-    criterion: nn.Module,
-    device: torch.device
-) -> tuple:
-    """Validate the model"""
-    model.eval()
-    running_loss = 0.0
-    running_acc = 0.0
+def save_checkpoint(model, epoch, save_dir):
+    """Save model checkpoint."""
+    save_dir = Path(save_dir)
+    save_dir.mkdir(parents=True, exist_ok=True)
 
-    for images, labels in dataloader:
-        images, labels = images.to(device), labels.to(device)
+    checkpoint_path = save_dir / f"epoch_{epoch}.pt"
+    torch.save(model.state_dict(), checkpoint_path)
 
-        outputs = model(images)
-        loss = criterion(outputs, labels)
-        acc = calculate_accuracy(outputs, labels)
-
-        running_loss += loss.item()
-        running_acc += acc
-
-    avg_loss = running_loss / len(dataloader)
-    avg_acc = running_acc / len(dataloader)
-
-    return avg_loss, avg_acc
+    display_checkpoint_saved(str(checkpoint_path))
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Train sign detection model')
-    parser.add_argument('--config', type=str, default='configs/train_config.yaml',
-                        help='Path to config file')
-    parser.add_argument('--data-dir', type=str, default='data/images',
-                        help='Path to data directory')
-    parser.add_argument('--epochs', type=int, default=50,
-                        help='Number of epochs')
-    parser.add_argument('--batch-size', type=int, default=32,
-                        help='Batch size')
-    parser.add_argument('--lr', type=float, default=1e-4,
-                        help='Learning rate')
-    parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu',
-                        help='Device to use')
-    args = parser.parse_args()
-
-    # Setup
+    """Main training function."""
     console = Console()
-    logger = setup_logger('train')
-    device = torch.device(args.device)
 
-    console.print(f"[bold green]Training on device: {device}[/bold green]")
+    # Get configuration
+    config = get_training_config()
 
-    # Load dataset
-    train_transform = get_train_transforms()
-    val_transform = get_val_transforms()
+    # Display training header using centralized function
+    display_training_header(config)
 
-    dataset = SignDataset(args.data_dir, transform=train_transform)
+    # Create datasets
+    console.print("[bold]Loading datasets...[/bold]")
+    train_dataset = DETRDataset(config['train_data_dir'], train=True)
+    test_dataset = DETRDataset(config['test_data_dir'], train=False)
 
-    # Split dataset
-    train_size = int(0.8 * len(dataset))
-    val_size = len(dataset) - train_size
-    train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
-    val_dataset.dataset.transform = val_transform
+    # Create dataloaders
+    train_dataloader = DataLoader(
+        train_dataset,
+        batch_size=config['batch_size'],
+        collate_fn=collate_fn,
+        shuffle=True,
+        drop_last=True
+    )
+    test_dataloader = DataLoader(
+        test_dataset,
+        batch_size=config['batch_size'],
+        collate_fn=collate_fn,
+        drop_last=True
+    )
 
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True, num_workers=4)
-    val_loader = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, num_workers=4)
-
-    console.print(f"[blue]Train samples: {len(train_dataset)}, Val samples: {len(val_dataset)}[/blue]")
+    console.print(f"[green]✓[/green] Train batches: [yellow]{len(train_dataloader)}[/yellow]")
+    console.print(f"[green]✓[/green] Test batches: [yellow]{len(test_dataloader)}[/yellow]")
+    console.print()
 
     # Create model
-    num_classes = len(dataset.classes)
-    model = SignDetectionModel(num_classes=num_classes).to(device)
+    console.print("[bold]Initializing model...[/bold]")
+    model = DETR(
+        num_classes=config['num_classes'],
+        hidden_dim=config['hidden_dim'],
+        nheads=config['nheads'],
+        num_encoder_layers=config['num_encoder_layers'],
+        num_decoder_layers=config['num_decoder_layers'],
+        num_queries=config['num_queries'],
+        dropout=config['dropout'],
+        verbose=True
+    )
 
-    console.print(f"[blue]Model created with {num_classes} classes: {dataset.classes}[/blue]")
+    # Load pretrained weights if specified
+    if config['pretrained_path'] is not None:
+        console.print(f"[bold]Loading pretrained weights from:[/bold] [cyan]{config['pretrained_path']}[/cyan]")
+        try:
+            model.load_pretrained(config['pretrained_path'])
+        except Exception as e:
+            display_info_message(f"Failed to load pretrained weights: {str(e)}", style="red")
+            display_info_message("Continuing with random initialization...", style="yellow")
+    else:
+        display_info_message("No pretrained weights specified. Using random initialization.", style="yellow")
 
-    # Loss and optimizer
-    criterion = nn.CrossEntropyLoss()
-    optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs)
+    console.print()
 
-    # Tensorboard
-    writer = SummaryWriter(log_dir='logs/tensorboard')
+    # Move model to device
+    device = torch.device(config['device'])
+    model = model.to(device)
+    console.print(f"[green]✓[/green] Model moved to device: [yellow]{device}[/yellow]")
+    console.print()
+
+    # Create optimizer
+    if config['optimizer'] == 'Adam':
+        optimizer = optim.Adam(model.parameters(), lr=config['learning_rate'])
+    elif config['optimizer'] == 'AdamW':
+        optimizer = optim.AdamW(model.parameters(), lr=config['learning_rate'])
+    else:
+        raise ValueError(f"Unknown optimizer: {config['optimizer']}")
+
+    # Create scheduler
+    T_0 = config['T_0'] if config['T_0'] is not None else len(train_dataloader) * 30
+    scheduler = optim.lr_scheduler.CosineAnnealingWarmRestarts(
+        optimizer,
+        T_0=T_0,
+        T_mult=config['T_mult']
+    )
+
+    # Create loss criterion
+    matcher = HungarianMatcher(config['loss_weights'])
+    criterion = DETRLoss(
+        num_classes=config['num_classes'],
+        matcher=matcher,
+        weight_dict=config['loss_weights'],
+        eos_coef=config['eos_coef']
+    )
 
     # Training loop
-    best_val_acc = 0.0
-    checkpoint_dir = Path('checkpoints')
-    checkpoint_dir.mkdir(exist_ok=True)
+    console.print("[bold green]Starting Training[/bold green]")
+    console.print()
 
-    for epoch in range(1, args.epochs + 1):
-        console.print(f"\n[bold cyan]Epoch {epoch}/{args.epochs}[/bold cyan]")
+    best_test_loss = float('inf')
 
-        # Train
-        train_loss, train_acc = train_one_epoch(
-            model, train_loader, criterion, optimizer, device, epoch, writer, console
-        )
+    with create_training_progress() as progress:
+        for epoch in range(config['epochs']):
+            # Create progress task for this epoch
+            task = progress.add_task(
+                "",
+                total=len(train_dataloader),
+                epoch_info=f"Epoch {epoch+1}/{config['epochs']}",
+                train_loss=0.0,
+                test_loss=0.0
+            )
 
-        # Validate
-        val_loss, val_acc = validate(model, val_loader, criterion, device)
+            # Train one epoch
+            try:
+                train_loss = train_one_epoch(
+                    model, train_dataloader, criterion, optimizer, device, progress, task
+                )
 
-        # Log
-        console.print(f"[green]Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.4f}[/green]")
-        console.print(f"[green]Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.4f}[/green]")
+                # Evaluate
+                test_loss = evaluate(model, test_dataloader, criterion, device)
 
-        writer.add_scalar('Train/Loss_Epoch', train_loss, epoch)
-        writer.add_scalar('Train/Acc_Epoch', train_acc, epoch)
-        writer.add_scalar('Val/Loss', val_loss, epoch)
-        writer.add_scalar('Val/Acc', val_acc, epoch)
-        writer.add_scalar('LR', optimizer.param_groups[0]['lr'], epoch)
+                # Update progress with final losses
+                progress.update(
+                    task,
+                    epoch_info=f"Epoch {epoch+1}/{config['epochs']}",
+                    train_loss=train_loss,
+                    test_loss=test_loss
+                )
 
-        # Save best model
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
-            torch.save({
-                'epoch': epoch,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'val_acc': val_acc,
-                'classes': dataset.classes
-            }, checkpoint_dir / 'best_model.pth')
-            console.print(f"[bold green]✓ Saved best model with val_acc: {val_acc:.4f}[/bold green]")
+                # Step scheduler
+                scheduler.step()
 
-        scheduler.step()
+                # Save best model
+                if test_loss < best_test_loss:
+                    best_test_loss = test_loss
+                    if config['checkpoint_dir'] is not None:
+                        save_checkpoint(model, "best", config['checkpoint_dir'])
 
-    writer.close()
-    console.print(f"\n[bold green]Training complete! Best val accuracy: {best_val_acc:.4f}[/bold green]")
+                # Save periodic checkpoint
+                if config['checkpoint_dir'] is not None:
+                    if (epoch + 1) % config['save_interval'] == 0:
+                        save_checkpoint(model, epoch + 1, config['checkpoint_dir'])
+
+            except Exception as e:
+                console.print()
+                display_training_error(epoch + 1, e)
+                import traceback
+                console.print(traceback.format_exc())
+                sys.exit(1)
+
+    # Save final model
+    console.print()
+    if config['checkpoint_dir'] is not None:
+        save_checkpoint(model, "final", config['checkpoint_dir'])
+
+    # Display training complete message
+    display_training_complete(best_test_loss)
 
 
 if __name__ == '__main__':

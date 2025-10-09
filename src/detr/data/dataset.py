@@ -9,9 +9,7 @@ from torch.utils.data import Dataset, DataLoader
 from PIL import Image
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
-from rich.console import Console
-from rich.table import Table
-from rich.panel import Panel
+from detr.utils import display_dataset_info
 
 
 class DETRDataset(Dataset):
@@ -45,7 +43,6 @@ class DETRDataset(Dataset):
         self.data_dir = data_dir
         self.train = train
         self.image_size = image_size
-        self.console = Console()
 
         # Paths
         self.images_path = os.path.join(data_dir, 'images')
@@ -55,55 +52,15 @@ class DETRDataset(Dataset):
         label_files = os.listdir(self.labels_path)
         self.labels = [f for f in label_files if f.endswith('.txt')]
 
-        # Display dataset info with rich
-        self._display_dataset_info()
-
-    def _display_dataset_info(self):
-        """Display dataset initialization information using rich."""
-        # Create dataset statistics table
-        table = Table(title="📊 DETR Dataset Statistics", show_header=True, header_style="bold cyan")
-        table.add_column("Metric", style="cyan", no_wrap=True)
-        table.add_column("Value", style="yellow")
-
-        mode_emoji = "🏋️" if self.train else "🧪"
-        mode_text = f"{mode_emoji} {'Training' if self.train else 'Validation/Test'}"
-
-        table.add_row("Data Path", self.data_dir)
-        table.add_row("Mode", mode_text)
-        table.add_row("Total Samples", str(len(self.labels)))
-        table.add_row("Image Size", f"{self.image_size}×{self.image_size}")
-        table.add_row("Images Path", self.images_path)
-        table.add_row("Labels Path", self.labels_path)
-
-        self.console.print(table)
-
-        # Display augmentation info
-        if self.train:
-            aug_list = [
-                "• Resize to 500×500",
-                "• Random Crop to 224×224 (p=0.33)",
-                "• Resize to final size",
-                "• Horizontal Flip (p=0.5)",
-                "• Color Jitter (p=0.5)",
-                "• Normalize (ImageNet stats)",
-                "• Convert to Tensor"
-            ]
-        else:
-            aug_list = [
-                "• Resize to target size",
-                "• Normalize (ImageNet stats)",
-                "• Convert to Tensor"
-            ]
-
-        aug_text = "\n".join(aug_list)
-        panel = Panel(
-            aug_text,
-            title="🔄 Data Transforms",
-            border_style="blue",
-            padding=(1, 2)
+        # Display dataset info using centralized display function
+        display_dataset_info(
+            data_dir=self.data_dir,
+            train=self.train,
+            num_samples=len(self.labels),
+            image_size=self.image_size,
+            images_path=self.images_path,
+            labels_path=self.labels_path
         )
-        self.console.print(panel)
-        self.console.print()  # Empty line for spacing
 
     def _get_transform(self):
         """Get albumentations transform pipeline."""
