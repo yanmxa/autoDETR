@@ -23,6 +23,10 @@ from .rich_display import (
     display_capture_session_info,
     display_capture_session_summary,
     create_capture_progress,
+
+    # General print functions
+    print_message,
+    print_empty_line,
 )
 
 __all__ = [
@@ -46,4 +50,8 @@ __all__ = [
     "display_capture_session_info",
     "display_capture_session_summary",
     "create_capture_progress",
+
+    # General
+    "print_message",
+    "print_empty_line",
 ]

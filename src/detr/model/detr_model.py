@@ -321,8 +321,9 @@ class DETR(nn.Module):
 if __name__ == '__main__':
     """Test DETR model."""
     from torchinfo import summary
-
-    console = Console()
+    from rich import box
+    from rich.panel import Panel
+    from detr.utils import print_message
 
     # ============================================================
     # Demo Configuration (Lightweight for Testing)
@@ -375,7 +376,7 @@ if __name__ == '__main__':
     # ============================================================
 
     # Create model (1 layer for demo)
-    console.print("\n[bold cyan]Creating DETR model...[/bold cyan]\n")
+    print_message("\n[bold cyan]Creating DETR model...[/bold cyan]\n")
     model = DETR(
         num_classes=3,          # Number of object classes (excluding background)
         num_queries=25,         # Number of detection slots (max objects per image)
@@ -387,17 +388,17 @@ if __name__ == '__main__':
     # For production/high accuracy: set num_encoder_layers=6, num_decoder_layers=6 → AP ~42%
 
     # Display model summary
-    console.print("[bold cyan]Model Summary:[/bold cyan]\n")
+    print_message("[bold cyan]Model Summary:[/bold cyan]\n")
     summary(model, input_size=(2, 3, 224, 224), device='cpu')
 
     # Test forward pass
-    console.print("\n[bold cyan]Testing forward pass...[/bold cyan]\n")
+    print_message("\n[bold cyan]Testing forward pass...[/bold cyan]\n")
     dummy_input = torch.randn(2, 3, 224, 224)
 
     with torch.no_grad():
         output = model(dummy_input)
 
-    console.print(Panel(
+    print_message(Panel(
         f"[green]Input shape:[/green] {list(dummy_input.shape)}\n"
         f"[green]Pred logits shape:[/green] {list(output['pred_logits'].shape)}\n"
         f"[green]Pred boxes shape:[/green] {list(output['pred_boxes'].shape)}",
@@ -405,4 +406,4 @@ if __name__ == '__main__':
         border_style="green",
         box=box.ROUNDED
     ))
-    console.print()
+    print_message()

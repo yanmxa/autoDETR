@@ -11,8 +11,6 @@ from torch import optim
 from torch.utils.data import DataLoader
 from pathlib import Path
 
-from rich.console import Console
-
 from detr.data.dataset import DETRDataset, collate_fn
 from detr.model import DETR
 from detr.loss import DETRLoss, HungarianMatcher, compute_total_loss
@@ -22,7 +20,9 @@ from detr.utils import (
     display_checkpoint_saved,
     display_training_complete,
     display_training_error,
-    display_info_message
+    display_info_message,
+    print_message,
+    print_empty_line
 )
 
 
@@ -155,8 +155,6 @@ def save_checkpoint(model, epoch, save_dir):
 
 def main():
     """Main training function."""
-    console = Console()
-
     # Get configuration
     config = get_training_config()
 
@@ -164,7 +162,7 @@ def main():
     display_training_header(config)
 
     # Create datasets
-    console.print("[bold]Loading datasets...[/bold]")
+    print_message("Loading datasets...", "bold")
     train_dataset = DETRDataset(config['train_data_dir'], train=True)
     test_dataset = DETRDataset(config['test_data_dir'], train=False)
 
@@ -183,12 +181,12 @@ def main():
         drop_last=True
     )
 
-    console.print(f"[green]✓[/green] Train batches: [yellow]{len(train_dataloader)}[/yellow]")
-    console.print(f"[green]✓[/green] Test batches: [yellow]{len(test_dataloader)}[/yellow]")
-    console.print()
+    print_message(f"[green]✓[/green] Train batches: [yellow]{len(train_dataloader)}[/yellow]")
+    print_message(f"[green]✓[/green] Test batches: [yellow]{len(test_dataloader)}[/yellow]")
+    print_empty_line()
 
     # Create model
-    console.print("[bold]Initializing model...[/bold]")
+    print_message("[bold]Initializing model...[/bold]")
     model = DETR(
         num_classes=config['num_classes'],
         hidden_dim=config['hidden_dim'],
@@ -202,7 +200,7 @@ def main():
 
     # Load pretrained weights if specified
     if config['pretrained_path'] is not None:
-        console.print(f"[bold]Loading pretrained weights from:[/bold] [cyan]{config['pretrained_path']}[/cyan]")
+        print_message(f"[bold]Loading pretrained weights from:[/bold] [cyan]{config['pretrained_path']}[/cyan]")
         try:
             model.load_pretrained(config['pretrained_path'])
         except Exception as e:
@@ -211,13 +209,13 @@ def main():
     else:
         display_info_message("No pretrained weights specified. Using random initialization.", style="yellow")
 
-    console.print()
+    print_empty_line()
 
     # Move model to device
     device = torch.device(config['device'])
     model = model.to(device)
-    console.print(f"[green]✓[/green] Model moved to device: [yellow]{device}[/yellow]")
-    console.print()
+    print_message(f"[green]✓[/green] Model moved to device: [yellow]{device}[/yellow]")
+    print_empty_line()
 
     # Create optimizer
     if config['optimizer'] == 'Adam':
@@ -245,8 +243,8 @@ def main():
     )
 
     # Training loop
-    console.print("[bold green]Starting Training[/bold green]")
-    console.print()
+    print_message("[bold green]Starting Training[/bold green]")
+    print_empty_line()
 
     best_test_loss = float('inf')
 
@@ -293,14 +291,14 @@ def main():
                         save_checkpoint(model, epoch + 1, config['checkpoint_dir'])
 
             except Exception as e:
-                console.print()
+                print_empty_line()
                 display_training_error(epoch + 1, e)
                 import traceback
-                console.print(traceback.format_exc())
+                print_message(traceback.format_exc())
                 sys.exit(1)
 
     # Save final model
-    console.print()
+    print_empty_line()
     if config['checkpoint_dir'] is not None:
         save_checkpoint(model, "final", config['checkpoint_dir'])
 

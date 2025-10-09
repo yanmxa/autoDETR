@@ -440,22 +440,61 @@ def display_capture_session_summary(total_captured: int, num_classes: int):
     console.print(summary)
 
 
-def create_capture_progress():
+def create_capture_progress(show_time: bool = True):
     """
     Create a rich progress bar for image capture.
+
+    Args:
+        show_time: Whether to show elapsed time (default: True)
 
     Returns:
         Progress: Configured progress bar object
     """
     from rich.progress import TimeElapsedColumn
 
-    return Progress(
+    columns = [
         SpinnerColumn(),
         TextColumn("[bold blue]{task.description}"),
         BarColumn(complete_style="green", finished_style="bold green"),
         TextColumn("[progress.percentage]{task.percentage:>3.0f}%"),
         TextColumn("•"),
         TextColumn("{task.completed}/{task.total}"),
-        TextColumn("•"),
-        TimeElapsedColumn()
-    )
+    ]
+
+    if show_time:
+        columns.extend([
+            TextColumn("•"),
+            TimeElapsedColumn()
+        ])
+
+    return Progress(*columns)
+
+
+# ============================================================================
+# General Print Functions
+# ============================================================================
+
+def print_message(*args, **kwargs):
+    """
+    Print a message using rich console.
+
+    Supports all console.print() arguments and rich markup.
+
+    Args:
+        *args: Same as Console.print()
+        **kwargs: Same as Console.print()
+
+    Examples:
+        print_message("Simple message")
+        print_message("[bold red]Error:[/bold red] Something went wrong")
+        print_message("[green]✓[/green] Success")
+        print_message("Value:", value, style="cyan")
+    """
+    console = Console()
+    console.print(*args, **kwargs)
+
+
+def print_empty_line():
+    """Print an empty line."""
+    console = Console()
+    console.print()

@@ -11,12 +11,12 @@ import os
 from datetime import datetime
 from typing import List
 
-from rich.console import Console
 from detr.utils import (
     display_capture_banner,
     display_capture_session_info,
     display_capture_session_summary,
-    create_capture_progress
+    create_capture_progress,
+    print_message
 )
 
 
@@ -32,7 +32,6 @@ class CaptureImages:
             classes: List of class names to capture
             camera_id: Camera device ID (default: 0)
         """
-        self.console = Console()
         self.cap = cv2.VideoCapture(camera_id)
         self.path = path
         self.classes = classes
@@ -42,14 +41,14 @@ class CaptureImages:
 
         # Verify camera connection
         if not self.cap.isOpened():
-            self.console.print(f"[bold red]✗[/bold red] Could not open camera {camera_id}")
+            print_message(f"[bold red]✗[/bold red] Could not open camera {camera_id}")
             raise Exception(f"Could not open camera {camera_id}")
         else:
-            self.console.print(f"[bold green]✓[/bold green] Camera {camera_id} connected successfully")
+            print_message(f"[bold green]✓[/bold green] Camera {camera_id} connected successfully")
 
         # Ensure output directory exists
         os.makedirs(self.path, exist_ok=True)
-        self.console.print(f"[blue]ℹ[/blue] Output directory: {self.path}")
+        print_message(f"[blue]ℹ[/blue] Output directory: {self.path}")
 
     def capture(self, class_name: str) -> bool:
         """
@@ -92,13 +91,13 @@ class CaptureImages:
 
             # Check for quit key
             if cv2.waitKey(1) & 0xFF == ord('q'):
-                self.console.print("[yellow]⚠[/yellow] Quit key pressed - stopping capture")
+                print_message("[yellow]⚠[/yellow] Quit key pressed - stopping capture")
                 return False
 
             return True
 
         except Exception as e:
-            self.console.print(f"[bold red]✗[/bold red] Error capturing {class_name}: {str(e)}")
+            print_message(f"[bold red]✗[/bold red] Error capturing {class_name}: {str(e)}")
             return False
 
     def run(self, sleep_time: int = 1, num_images: int = 10):
@@ -115,14 +114,14 @@ class CaptureImages:
         total_captured = 0
 
         for img_class in self.classes:
-            self.console.print(
+            print_message(
                 f"\n[bold magenta]┌─ Starting capture for: {img_class} ({num_images} images)[/bold magenta]"
             )
 
             class_captured = 0
 
             # Create progress bar using centralized function
-            with create_capture_progress() as progress:
+            with create_capture_progress(show_time=False) as progress:
                 task = progress.add_task(f"Capturing {img_class}", total=num_images)
 
                 for idx in range(num_images):
@@ -131,13 +130,13 @@ class CaptureImages:
                     if success:
                         class_captured += 1
                         total_captured += 1
-                        self.console.print(
-                            f"[dim]{datetime.now().strftime('%m/%d/%y %H:%M:%S')}[/dim] "
+                        print_message(
+                            f"[dim]{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}[/dim] "
                             f"[green]✓[/green] Captured [bold]{img_class}[/bold] image #{idx + 1}"
                         )
                     else:
-                        self.console.print(
-                            f"[dim]{datetime.now().strftime('%m/%d/%y %H:%M:%S')}[/dim] "
+                        print_message(
+                            f"[dim]{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}[/dim] "
                             f"[red]✗[/red] Error capturing {img_class} image #{idx + 1}"
                         )
 
@@ -145,11 +144,11 @@ class CaptureImages:
                     time.sleep(sleep_time)
 
             # Show completion for this class
-            self.console.print(
-                f"[dim]{datetime.now().strftime('%m/%d/%y %H:%M:%S')}[/dim] "
+            print_message(
+                f"[dim]{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}[/dim] "
                 f"[bold green]ℹ Completed {img_class}: {class_captured}/{num_images} images captured[/bold green]"
             )
-            self.console.print(f"[magenta]└─ {img_class} complete[/magenta]\n")
+            print_message(f"[magenta]└─ {img_class} complete[/magenta]\n")
 
         # Display session completion using centralized function
         display_capture_session_summary(total_captured, len(self.classes))
@@ -157,7 +156,7 @@ class CaptureImages:
         # Clean up
         self.cap.release()
         cv2.destroyAllWindows()
-        self.console.print("[blue]ℹ[/blue] Camera released and windows closed")
+        print_message("[blue]ℹ[/blue] Camera released and windows closed")
 
 
 def main():
