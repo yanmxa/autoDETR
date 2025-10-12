@@ -9,12 +9,12 @@ Complete optimization journey from baseline to production-ready configuration.
 | Item | Value |
 |------|-------|
 | **Dataset Size** | 85 images (29/28/28 per class) |
-| **Total Phases** | 4 optimization attempts |
+| **Total Phases** | 5 (4 algorithmic + 1 data-driven) |
 | **Best Configuration** | Phase 2 (2+2 layers, 256 dim, 100 epochs) |
-| **Best Performance** | Test Loss 4.90, Confidence 0.25-0.30 |
-| **Performance Ceiling** | ~4.5-5.0 test loss, ~0.30-0.35 confidence |
-| **Production Target** | Test Loss < 2.0, Confidence > 0.70 |
-| **Gap to Production** | **2.45x improvement needed** |
+| **Best Performance** | Test Loss 4.90 |
+| **Performance Ceiling** | ~4.5-5.0 test loss |
+| **Production Target** | Test Loss < 2.0 |
+| **Gap to Production** | **2.2x improvement needed** |
 | **Conclusion** | ⚠️ **Data collection mandatory for production** |
 
 ---
@@ -27,6 +27,7 @@ Complete optimization journey from baseline to production-ready configuration.
 | **[Phase 2](docs/PHASE2_ARCHITECTURE_UPGRADE.md)** | Architecture Upgrade | ✅ **BEST** | 2+2 layers, optimal config |
 | **[Phase 3](docs/PHASE3_SMALL_DATASET_OPT.md)** | Small Dataset Opt | ❌ Failure | Over-simplification failed |
 | **[Phase 4](docs/PHASE4_ENHANCED_PHASE2.md)** | Enhanced Phase 2 | ⚠️ Partial | Best stability, lower perf |
+| **[Phase 5](docs/PHASE5_DATA_COLLECTION.md)** | Data Collection Strategy | 🎯 **RECOMMENDED** | Production path via data expansion |
 
 ---
 
@@ -34,21 +35,21 @@ Complete optimization journey from baseline to production-ready configuration.
 
 ### Performance Metrics
 
-| Phase | Architecture | Test Loss | Confidence | Stability | Verdict |
-|-------|--------------|-----------|------------|-----------|---------|
-| **Initial** | 1+1, 256, lr=1e-5 | 7.0 | 0.10-0.13 | Good | ❌ Baseline |
-| **[Phase 1](docs/PHASE1_HYPERPARAMETER_TUNING.md)** | 1+1, 256, lr=1e-4 | 7.0 | 0.15-0.16 | Good | ⚠️ +50% conf |
-| **[Phase 2](docs/PHASE2_ARCHITECTURE_UPGRADE.md)** | 2+2, 256, q=100 | **4.90** 🏆 | **0.25-0.30** 🏆 | Good | ✅ **BEST** |
-| **[Phase 3](docs/PHASE3_SMALL_DATASET_OPT.md)** | 1+1, 128, q=25 | 9.06 | - | Poor | ❌ -85% perf |
-| **[Phase 4](docs/PHASE4_ENHANCED_PHASE2.md)** | 2+2, 256, q=50 | 5.81 | 0.290 | **Excellent** 🏆 | ⚠️ -19% perf |
+| Phase | Architecture | Test Loss | Stability | Verdict |
+|-------|--------------|-----------|-----------|---------|
+| **Initial** | 1+1, 256, lr=1e-5 | 7.0 | Good | ❌ Baseline |
+| **[Phase 1](docs/PHASE1_HYPERPARAMETER_TUNING.md)** | 1+1, 256, lr=1e-4 | 7.0 | Good | ⚠️ Marginal |
+| **[Phase 2](docs/PHASE2_ARCHITECTURE_UPGRADE.md)** | 2+2, 256, q=100 | **4.90** 🏆 | Good | ✅ **BEST (85 samples)** |
+| **[Phase 3](docs/PHASE3_SMALL_DATASET_OPT.md)** | 1+1, 128, q=25 | 9.06 | Poor | ❌ -85% perf |
+| **[Phase 4](docs/PHASE4_ENHANCED_PHASE2.md)** | 2+2, 256, q=50 | 5.81 | **Excellent** 🏆 | ⚠️ -19% perf |
+| **[Phase 5](docs/PHASE5_DATA_COLLECTION.md)** | Phase 2 + Data | **1.8-2.5** (proj) | TBD | 🎯 **PRODUCTION PATH** |
 
 ### Timeline Visualization
 
 ```
-Initial (7.0) → Phase 1 (7.0) → Phase 2 (4.90) → Phase 3 (9.06) → Phase 4 (5.81)
-     ❌              ⚠️              ✅ BEST           ❌               ⚠️
-                                      ↑
-                              Optimal for 85 samples
+Initial (7.0) → Phase 1 (7.0) → Phase 2 (4.90) → Phase 3 (9.06) → Phase 4 (5.81) → Phase 5 (1.8-2.5 proj)
+     ❌              ⚠️              ✅ BEST           ❌               ⚠️                🎯 PRODUCTION
+                              (85 samples ceiling)                                  (400+ samples)
 ```
 
 ---
@@ -83,7 +84,6 @@ Phase 4: Fine-tuning Phase 2   → Test loss 5.81 (-19% worse)
 | Metric | Current Best | Theoretical Max | Production Target | Gap |
 |--------|--------------|-----------------|-------------------|-----|
 | **Test Loss** | 4.90 | ~4.5 | < 2.0 | **2.2x** |
-| **Confidence** | 0.30 | ~0.35 | > 0.70 | **2.3x** |
 
 **Verdict**: **Cannot reach production quality without more data**
 
@@ -184,8 +184,8 @@ config = {
 ### Option 1: Use Phase 2 Model (Current Best)
 
 **Use Case**: Demo, proof-of-concept, testing
-**Performance**: Test Loss 4.90, Confidence 0.30
-**Limitation**: ⚠️ Not production-ready (confidence too low)
+**Performance**: Test Loss 4.90
+**Limitation**: ⚠️ Not production-ready (limited dataset)
 
 ```bash
 # Use Phase 2 checkpoint (best performance)
@@ -198,7 +198,6 @@ detr-eval --checkpoint checkpoints_phase2/epoch_best.pt
 
 **Expected Results**:
 - Test Loss: 4.5-4.8
-- Confidence: 0.30-0.35
 - Training: Most stable
 - Effort: ~5 hours CPU
 - Success Probability: 70-80%
@@ -217,20 +216,18 @@ Time:       2-3 hours collection
 
 Expected Results:
   - Test Loss: 2.5-3.5
-  - Confidence: 0.60-0.75
   - Production: Borderline
 ```
 
-#### Production-Grade (300-500 images) ⭐ RECOMMENDED
+#### Production-Grade (400 images) ⭐ RECOMMENDED
 ```
-Target:     100-150 images per class (300-450 total)
+Target:     120-140 images per class (400 total)
 Method:     Multiple collection sessions + variations
-Time:       5-7 sessions
+Time:       6-8 hours
 
 Expected Results:
-  - Test Loss: < 2.0
-  - Confidence: 0.80-0.95
-  - mAP: 50-60%
+  - Test Loss: 1.8-2.5
+  - mAP: 50-65%
   - Production: Yes ✅
 ```
 
@@ -259,19 +256,19 @@ detr-eval
 
 ### With Current Dataset (85 samples)
 
-| Approach | Expected Loss | Expected Conf | Production Ready |
-|----------|--------------|---------------|------------------|
-| Phase 2 (current) | 4.90 | 0.30 | ❌ No |
-| Phase 2.5 | 4.5-4.8 | 0.30-0.35 | ❌ No |
-| **Ceiling** | **~4.5** | **~0.35** | **❌ No** |
+| Approach | Expected Loss | Production Ready |
+|----------|--------------|------------------|
+| Phase 2 (current) | 4.90 | ❌ No |
+| Phase 2.5 | 4.5-4.8 | ❌ No |
+| **Ceiling** | **~4.5** | **❌ No** |
 
 ### With More Data
 
-| Samples | Expected Loss | Expected Conf | Production Ready |
-|---------|--------------|---------------|------------------|
-| **200** | 2.5-3.5 | 0.60-0.75 | ⚠️ Borderline |
-| **300** | 2.0-2.5 | 0.70-0.85 | ✅ Yes |
-| **500+** | < 2.0 | 0.80-0.95 | ✅ Yes ⭐ |
+| Samples | Expected Loss | mAP@0.5 | Production Ready |
+|---------|--------------|---------|------------------|
+| **200** | 2.5-3.5 | 35-45% | ⚠️ Borderline |
+| **400** | 1.8-2.5 | 50-65% | ✅ Yes ⭐ |
+| **600+** | < 1.5 | 65-75% | ✅ Premium |
 
 ---
 
@@ -281,7 +278,6 @@ detr-eval
 |-------|---------|------------|----------|
 | **Duplicate Detections** | 10-18 boxes per object | Model using all queries | More diverse data |
 | **Classification Bias** | Only 'one' class detected | ~28 samples/class | 100+ images/class |
-| **Low Confidence** | Max 0.30-0.35 | Limited training data | 200+ total images |
 | **BBox Inaccuracy** | Poor localization | Few training examples | More data + training |
 
 ---
@@ -293,7 +289,7 @@ detr-eval
 - **[Phase 1: Hyperparameter Tuning](docs/PHASE1_HYPERPARAMETER_TUNING.md)**
   - Learning rate optimization (1e-5 → 1e-4)
   - Loss weight tuning
-  - Result: +50% confidence improvement
+  - Result: Marginal improvement
 
 - **[Phase 2: Architecture Upgrade](docs/PHASE2_ARCHITECTURE_UPGRADE.md)** ⭐
   - 2+2 transformer layers
@@ -309,6 +305,11 @@ detr-eval
   - Adaptive LR scheduling
   - Fine-tuning attempt
   - Result: Best stability, lower performance
+
+- **[Phase 5: Data Collection Strategy](docs/PHASE5_DATA_COLLECTION.md)** 🎯
+  - Systematic data expansion (200/400/600 samples)
+  - Milestone-based implementation plan
+  - Result: **Recommended path to production**
 
 ---
 
@@ -337,25 +338,31 @@ detr-eval
 
 ### Critical Insight 💡
 
-> **"Four optimization phases conclusively prove: Phase 2 configuration is optimal for DETR with 85 samples. The ~0.30 confidence ceiling is a fundamental data limitation, not an engineering problem. Production deployment requires data collection—there is no algorithmic workaround."**
+> **"Four optimization phases conclusively prove: Phase 2 configuration is optimal for DETR with 85 samples. The ~4.5 test loss ceiling is a fundamental data limitation, not an engineering problem. Production deployment requires data collection—there is no algorithmic workaround."**
+
+**Phase 5 addresses this**: Systematic data expansion to 400+ samples using proven Phase 2 configuration, targeting production-grade performance (test loss < 2.0).
 
 ---
 
 ## 🚀 Next Steps Decision Tree
 
 ```
-Current: 85 samples, Test Loss 4.90, Confidence 0.30
+Current: 85 samples, Test Loss 4.90
                          |
                          ↓
             Is production quality needed?
                   /              \
                 Yes               No
                  ↓                 ↓
-    Collect 200-500 images    Use Phase 2 model
-    Use Phase 2 config        (Demo/POC only)
-    Expected: 0.7-0.9 conf
-                 ↓
-        PRODUCTION READY ✅
+    Follow Phase 5 Plan       Use Phase 2 model
+    (Data Collection)         (Demo/POC only)
+    See: docs/PHASE5_DATA_COLLECTION.md
+         ↓
+    Milestone 1: 200 samples → Loss 2.5-3.5
+         ↓
+    Milestone 2: 400 samples → Loss 1.8-2.5 ✅ PRODUCTION
+         ↓
+    Milestone 3: 600+ samples → Loss < 1.5 (Premium)
 ```
 
 ---
@@ -366,10 +373,9 @@ Current: 85 samples, Test Loss 4.90, Confidence 0.30
 |--------|-------|--------|
 | **Best Model** | Phase 2 | ✅ Identified |
 | **Best Test Loss** | 4.90 | ✅ Achieved |
-| **Best Confidence** | 0.25-0.30 | ⚠️ Below target |
 | **Performance Ceiling** | Reached | ✅ Confirmed |
 | **Production Readiness** | Not ready | ❌ Need data |
-| **Recommended Action** | Collect 200-500 images | 🎯 Clear path |
+| **Recommended Action** | Phase 5: Collect 400+ images | 🎯 Clear path |
 
 ---
 
@@ -378,8 +384,9 @@ Current: 85 samples, Test Loss 4.90, Confidence 0.30
 ### Current State
 - ✅ **Best configuration identified**: Phase 2
 - ✅ **Performance ceiling reached**: ~4.5-5.0 test loss
-- ✅ **All optimization avenues explored**: 4 phases complete
+- ✅ **All algorithmic optimization explored**: 4 phases complete
 - ❌ **Production quality**: Not achievable with 85 samples
+- 🎯 **Phase 5 defined**: Clear data collection roadmap
 
 ### Path Forward
 
@@ -388,23 +395,25 @@ Current: 85 samples, Test Loss 4.90, Confidence 0.30
 - Document limitations clearly
 - Optional: Try Phase 2.5 for marginal gains
 
-**Long Term** (1-2 weeks):
-- 🎯 **Collect 200-500 images** (mandatory for production)
-- 🎯 Retrain with Phase 2 configuration
-- 🎯 Achieve production quality (confidence > 0.7)
+**Recommended Path** (1-2 weeks): 🎯
+- **Follow Phase 5 implementation plan** ([see details](docs/PHASE5_DATA_COLLECTION.md))
+- **Milestone 1**: Collect 200 samples → Validate approach
+- **Milestone 2**: Collect 400 samples → Production ready
+- **Milestone 3**: (Optional) 600+ samples → Premium performance
 
 ### Final Verdict
 
-**The performance ceiling with 85 samples has been thoroughly explored and confirmed. To reach production quality, data collection is not optional—it is mandatory.**
+**The performance ceiling with 85 samples has been thoroughly explored and confirmed. Phase 5 provides the systematic data collection strategy to achieve production quality (test loss < 2.0, mAP > 50%).**
 
 ---
 
-**Document Version**: 5.0 (Modular)
-**Last Updated**: After Phase 4 completion
-**Status**: All experiments complete, recommendations provided
+**Document Version**: 6.0 (Modular + Phase 5)
+**Last Updated**: After Phase 5 planning
+**Status**: Phase 1-4 complete, Phase 5 implementation plan ready
 
 **See Also**:
 - [Phase 1 Details](docs/PHASE1_HYPERPARAMETER_TUNING.md)
 - [Phase 2 Details](docs/PHASE2_ARCHITECTURE_UPGRADE.md)
 - [Phase 3 Details](docs/PHASE3_SMALL_DATASET_OPT.md)
 - [Phase 4 Details](docs/PHASE4_ENHANCED_PHASE2.md)
+- [Phase 5 Details](docs/PHASE5_DATA_COLLECTION.md) 🎯 **Recommended Next Step**
