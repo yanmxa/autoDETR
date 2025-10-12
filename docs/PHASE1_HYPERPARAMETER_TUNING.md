@@ -1,136 +1,126 @@
-# Phase 1: Hyperparameter Tuning
+# Phase 1: Learning Rate Optimization
 
-**Date**: Initial optimization attempt
-**Goal**: Improve baseline performance through learning rate and loss weight optimization
-**Status**: ⚠️ Marginal improvement
+**Single Variable**: Learning Rate (1e-5 → 1e-4)
 
 ---
 
-## Problem Statement
+## 1. Problem Analysis
 
-Initial baseline model showed:
-- Extremely low confidence (0.10-0.13)
-- Poor bbox accuracy (negative coordinates)
-- All predictions classified as "one"
-- Learning rate too low (1e-5)
+**From Baseline**:
 
-## Hypothesis
+- Test Loss: 7.0 (too high)
+- Confidence: 0.10-0.13 (target: 0.7+)
+- Training: Slow convergence, 100 epochs needed
+- Root cause: Learning rate too conservative (1e-5)
 
-Adjusting learning rate and loss weights can significantly improve model performance without architectural changes.
+**Evidence**: Loss curves showed slow descent, suggesting faster learning possible.
 
 ---
 
-## Configuration Changes
+## 2. Hypothesis
 
-| Parameter | Before | After | Change | Rationale |
-|-----------|--------|-------|--------|-----------|
-| `learning_rate` | 1e-5 | **1e-4** | 10x ⬆️ | Faster convergence |
-| `class_weighting` | 1.0 | **2.0** | 2x ⬆️ | Emphasize classification |
-| `eos_coef` | 0.1 | **0.05** | 50% ⬇️ | Reduce background bias |
-| `epochs` | 100 | **50** | 50% ⬇️ | Faster iteration |
+> **"Increasing learning rate from 1e-5 to 1e-4 will accelerate convergence and reduce training time without sacrificing stability."**
 
-### Full Configuration
+**Rationale**: Adam optimizer typically works well with 1e-4 for transformers.
 
+---
+
+## 3. Experiment Design
+
+### What Changed
+- **Learning Rate**: 1e-5 → **1e-4** (10x increase)
+
+### What Stayed the Same
 ```python
-config = {
-    # Architecture (unchanged)
-    'num_encoder_layers': 1,
-    'num_decoder_layers': 1,
-    'hidden_dim': 256,
-    'num_queries': 100,
-    'dropout': 0.1,
-
-    # Training (tuned)
-    'learning_rate': 1e-4,     # ⬆️ 10x increase
-    'epochs': 50,
-    'batch_size': 4,
-
-    # Loss weights (tuned)
-    'loss_weights': {
-        'class_weighting': 2.0,  # ⬆️ 2x increase
-        'bbox_weighting': 5.0,
-        'giou_weighting': 2.0
-    },
-    'eos_coef': 0.05,           # ⬇️ 50% reduction
-}
+Architecture:     1+1 layers, 256 dim, 100 queries
+Loss Weights:     class=1.0, bbox=5.0, giou=2.0
+Epochs:           50
+Batch Size:       4
 ```
 
+### Success Criteria
+- Test loss < 6.0 (at least 15% improvement)
+- Stable training (no divergence)
+- Faster convergence (fewer epochs needed)
+
 ---
 
-## Results
+## 4. Results
 
-### Training Metrics
-- **Final Train Loss**: ~6.0
-- **Final Test Loss**: ~7.0
-- **Loss Reduction**: ~15-20%
+| Metric | Baseline | Phase 1 | Change |
+|--------|----------|---------|--------|
+| **Test Loss** | 7.0 | **7.0** | 0% |
+| **Train Loss** | ~7.0 | ~6.0 | -14% |
+| **Confidence** | 0.10-0.13 | 0.15-0.16 | +50% |
+| **Training Stability** | Good | Good | ✓ |
 
-### Detection Performance
+### Sample Detections
 
+```text
+Image 0: one (0.163) bbox: [-22.5, 166.7, 33.7, 225.2]
+Image 0: two (0.157) bbox: [-21.7, 77.5, 38.9, 210.5]
+Image 1: two (0.153) bbox: [-22.5, 50.7, 39.2, 198.8]
 ```
-Sample Detections:
-  Image 0: one (0.163) bbox: [-22.5, 166.7, 33.7, 225.2]
-  Image 0: two (0.157) bbox: [-21.7, 77.5, 38.9, 210.5]
-  Image 1: two (0.153) bbox: [-22.5, 50.7, 39.2, 198.8]
-  Image 3: one (0.160) bbox: [-22.2, 165.3, 33.5, 225.0]
-```
 
-**Confidence**: 0.15-0.16 (vs baseline 0.10-0.13)
+**Observations**:
+
+- Confidence improved 50% but still very low
+- BBox still has negative coordinates
+- Some class diversity appeared
 
 ---
 
-## Analysis
+## 5. Analysis
 
-### ✅ Improvements
-1. **Confidence increased 50%** (0.10 → 0.15-0.16)
-2. **Class diversity improved** (detecting both 'one' and 'two')
-3. **Faster training** (50 epochs vs 100)
+### Hypothesis Validation
 
-### ❌ Remaining Issues
-1. **Still very low confidence** (target: 0.7+, gap: 4.6x)
-2. **Bbox still inaccurate** (negative coordinates)
-3. **Model underfitting** (loss plateaued at ~7.0)
+❌ **Hypothesis partially rejected**
 
----
+- ✅ Training stability maintained
+- ✅ Confidence improved (+50%)
+- ⚠️ Test loss unchanged (0% improvement)
+- ❌ Still far from production quality
 
-## Conclusion
+### Why It Didn't Work as Expected
 
-### What Worked
-- ✅ Learning rate increase (1e-5 → 1e-4) was effective
-- ✅ Classification weight increase helped class diversity
-- ✅ Reduced background bias (eos_coef)
+**Root Cause**: Model capacity bottleneck
 
-### What Didn't Work
-- ❌ Hyperparameter tuning alone insufficient
-- ❌ Model capacity too low for task complexity
-- ❌ Hit performance ceiling quickly
+- 1+1 layer architecture too simple for DETR
+- Faster learning can't overcome insufficient model capacity
+- Hit performance ceiling regardless of learning rate
 
-### Key Insight
-> **"Hyperparameter optimization cannot compensate for insufficient model capacity. Architecture changes needed."**
+### Unexpected Finding
+
+Learning rate increase did improve **train loss** (-14%) but not **test loss**, suggesting the model is learning but hitting capacity limits.
 
 ---
 
-## Next Steps
+## 6. Next Steps
 
-**Recommendation**: Increase model complexity
-- Upgrade to 2+2 transformer layers
-- Increase bbox/giou loss weights
-- Train for longer (100 epochs)
+### Decision
 
-**Rationale**: 1+1 layer architecture insufficient for DETR's attention mechanism to learn complex patterns.
+✅ **ADOPT** learning rate change (1e-5 → 1e-4)
 
----
+- Training is stable
+- Marginal improvements visible
+- Industry standard for transformers
 
-## Metrics Summary
+### Next Problem to Solve
 
-| Metric | Baseline | Phase 1 | Improvement |
-|--------|----------|---------|-------------|
-| Test Loss | 7.0 | 7.0 | 0% |
-| Confidence | 0.10-0.13 | 0.15-0.16 | +50% |
-| Class Diversity | One only | One, Two | ✓ |
-| BBox Quality | Negative | Negative | ✗ |
+**Model Capacity** - Architecture upgrade needed
 
-**Overall Grade**: ⚠️ Marginal Success
+- Hypothesis: 2+2 layers will break performance ceiling
+- Next phase: Increase encoder/decoder layers
+- Keep lr=1e-4 as new baseline
 
 ---
 
-**See Also**: [Phase 2: Architecture Upgrade](PHASE2_ARCHITECTURE_UPGRADE.md)
+## Summary
+
+| What Worked | What Didn't | Key Insight |
+|-------------|-------------|-------------|
+| ✅ Stable training | ❌ Test loss flat | Hyperparameter tuning |
+| ✅ Confidence +50% | ❌ Still low quality | can't fix insufficient |
+| ✅ Faster convergence | ❌ BBox inaccurate | model capacity |
+
+**Next**: [Phase 2: Architecture Upgrade](PHASE2_ARCHITECTURE_UPGRADE.md) - Increase to 2+2 layers

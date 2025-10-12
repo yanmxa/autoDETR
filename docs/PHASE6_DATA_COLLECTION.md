@@ -1,35 +1,34 @@
-# Phase 5: Data Collection Strategy 🎯 RECOMMENDED PATH
+# Phase 6: Data Collection Strategy
 
-**Date**: Fifth phase - Strategic data expansion
-**Goal**: Break through 85-sample performance ceiling via systematic data collection
+**Focus**: Break performance ceiling by expanding training dataset
 **Status**: 📋 **Implementation Plan Ready**
 
 ---
 
-## Problem Statement
+## Problem Analysis
 
-After 4 comprehensive optimization phases:
-- Phase 2 identified as optimal configuration (Test Loss 4.90, Confidence 0.30)
-- Phase 3 proved minimum complexity requirements (2+2 layers, 256 dim)
-- Phase 4 validated adaptive scheduling benefits
-- **Performance ceiling confirmed**: ~0.30-0.35 confidence with 85 samples
-- **Production gap**: 2.45x improvement needed (0.30 → 0.70+ confidence)
+**Phase 5 Results**:
+- Test Loss: 3.97 (best algorithmic performance)
+- Configuration: Optimal (Phase 2 + ReduceLROnPlateau)
+- Issue: **Cannot reach production quality (< 2.0 loss)**
+- Root cause: **85 samples insufficient** (28/class vs 100-500 industry standard)
 
-**Root Cause**: 85 samples is **6-10x below DETR minimum requirements**
-- Current: ~28 images per class
-- Industry minimum: 100-500 images per class
-- DETR typical training: 500-1000+ images per class
+**Evidence**:
+- Phase 1-5 all hit data ceiling
+- No overfitting (train-test gap minimal)
+- Model has capacity for more data
+
+---
 
 ## Hypothesis
 
-**"Systematic data collection to 200-500 samples will break the performance ceiling and achieve production-grade confidence (>0.70) using the proven Phase 2 configuration."**
+**"Expanding dataset to 400 samples will break the 3.97 ceiling and achieve production quality (test loss < 2.0)"**
 
-**Evidence Supporting This Hypothesis**:
-1. All 4 phases hit same ceiling (~0.30-0.35 confidence)
-2. No overfitting observed (train-test gap minimal)
-3. Model capacity proven sufficient (Phase 2 architecture works)
-4. Industry standards: DETR requires 100-500+ samples/class
-5. No algorithmic workaround exists (4 phases explored all options)
+**Rationale**:
+1. Current: 28 samples/class → Target: 130 samples/class (4.6x)
+2. Model proven optimal (Phase 5)
+3. No overfitting → has capacity for more data
+4. Industry standard: 100-500 samples/class for DETR
 
 ---
 
@@ -99,8 +98,9 @@ Validation Data:   ~60 images (15%)
 Test Data:         ~60 images (15%)
 
 Projected Performance:
-  Test Loss:       1.8-2.5 (vs 4.90 current)
-  Confidence:      0.75-0.90 (vs 0.30 current)
+  Baseline:        3.97 (Phase 5 with 85 samples)
+  Target:          1.8-2.5 test loss
+  Improvement:     50-55% reduction
   mAP@0.5:         50-65%
   Classification:  All 3 classes detected
   Production:      ✅ READY
@@ -154,7 +154,7 @@ Projected Performance:
 
 ## Training Configuration
 
-### Use Proven Phase 2 Configuration
+### Use Phase 5 Configuration (Best Proven)
 
 ```python
 config = {
@@ -170,12 +170,11 @@ config = {
     'batch_size': 4,
     'epochs': 100,  # May extend to 150 for larger datasets
 
-    # Scheduler (Phase 2 or Phase 4's improved version)
-    'scheduler': 'CosineAnnealingWarmRestarts',  # Phase 2 original
-    # OR
-    # 'scheduler': 'ReduceLROnPlateau',  # Phase 4 improved (better stability)
-    # 'patience': 10,
-    # 'lr_factor': 0.5,
+    # Scheduler (Phase 5 - PROVEN BEST)
+    'scheduler': 'ReduceLROnPlateau',  # Phase 5 proved 19% better
+    'patience': 10,
+    'lr_factor': 0.5,
+    'min_lr': 1e-6,
 
     # Loss Weights (BALANCED - DO NOT CHANGE)
     'loss_weights': {
@@ -187,7 +186,7 @@ config = {
 }
 ```
 
-**Critical**: Do NOT modify architecture or loss weights. Phase 2 configuration already optimal.
+**Critical**: Do NOT modify any parameters. Phase 5 configuration is optimal (3.97 test loss proven).
 
 ### Training Workflow
 
@@ -200,8 +199,8 @@ python src/detr/tools/reorganize_data.py
 # 2. Verify data distribution
 ls -R data/  # Check train/val/test splits
 
-# 3. Train with Phase 2 config
-detr-train --config src/detr/config.py
+# 3. Train with Phase 5 config (already set in config.py)
+detr-train
 
 # 4. Evaluate
 detr-eval --checkpoint checkpoints/epoch_best.pt

@@ -19,14 +19,14 @@ def get_model_config():
         dict: Model configuration parameters
     """
     config = {
-        # Model architecture (PHASE 4: Enhanced Phase 2 - Best proven config)
+        # Model architecture (PHASE 2: PROVEN OPTIMAL for 85 samples)
         'num_classes': 3,
-        'num_queries': 50,         # REDUCED from 100 (simpler scenes, Phase 2 used 100)
-        'num_encoder_layers': 2,   # RESTORED from Phase 2 (was 1 in Phase 3)
-        'num_decoder_layers': 2,   # RESTORED from Phase 2 (was 1 in Phase 3)
+        'num_queries': 100,        # OPTIMAL: Don't reduce (Phase 4 proved 50 causes duplicates)
+        'num_encoder_layers': 2,   # MINIMUM for DETR
+        'num_decoder_layers': 2,   # MINIMUM for DETR
         'nheads': 8,
-        'hidden_dim': 256,         # RESTORED from Phase 2 (was 128 in Phase 3)
-        'dropout': 0.2,            # MODERATE regularization (was 0.3 in Phase 3, 0.1 in Phase 2)
+        'hidden_dim': 256,         # MINIMUM for attention mechanism
+        'dropout': 0.1,            # OPTIMAL: Don't increase (Phase 4 proved 0.2 over-regularizes)
     }
     return config
 
@@ -52,26 +52,32 @@ def get_training_config():
         'train_data_dir': 'data_new/train',
         'test_data_dir': 'data_new/test',
 
-        # Training hyperparameters (PHASE 4: Enhanced Phase 2)
-        'epochs': 150,             # INCREASED from Phase 2 (100) for better convergence
-        'batch_size': 4,           # RESTORED from Phase 2 (was 2 in Phase 3)
-        'learning_rate': 1e-4,     # Same as Phase 2 (proven effective)
+        # Training hyperparameters (PHASE 2.5: Phase 2 + improved scheduler)
+        'epochs': 120,             # Extended for ReduceLROnPlateau (Phase 2 best at epoch 71)
+        'batch_size': 4,           # Good balance
+        'learning_rate': 1e-4,     # Stable & effective
         'grad_clip_max_norm': 1.0, # Gradient clipping threshold
 
-        # Loss weights (Balanced between Phase 2 and Phase 3)
+        # Loss weights (PHASE 2: BALANCED - DON'T CHANGE)
         'loss_weights': {
-            'class_weighting': 2.5,  # Phase 2=2.0, Phase 3=3.0 → middle ground
-            'bbox_weighting': 12.0,  # Phase 2=10.0, Phase 3=15.0 → middle ground
-            'giou_weighting': 6.0    # Phase 2=5.0, Phase 3=8.0 → middle ground
+            'class_weighting': 2.0,  # BALANCED: Proven optimal
+            'bbox_weighting': 10.0,  # STRONG localization: Proven optimal
+            'giou_weighting': 5.0    # GOOD overlap: Proven optimal
         },
-        'eos_coef': 0.015,         # Phase 2=0.02, Phase 3=0.01 → middle ground
+        'eos_coef': 0.02,          # MINIMAL background bias: Proven optimal
 
-        # Optimizer and scheduler (PHASE 4: Adaptive LR for stability)
+        # Optimizer and scheduler (PHASE 2.5: Phase 2 + Phase 4's improved scheduler)
         'optimizer': 'Adam',       # 'Adam' or 'AdamW'
-        'scheduler': 'ReduceLROnPlateau',  # CHANGED: Adaptive scheduling
+        'scheduler': 'ReduceLROnPlateau',  # Phase 4's ONLY successful improvement
         'patience': 10,            # Reduce LR if no improvement for 10 epochs
         'lr_factor': 0.5,          # Reduce LR by 50% when triggered
         'min_lr': 1e-6,            # Minimum learning rate
+
+        # Alternative: Use Phase 2's original scheduler (comment above, uncomment below)
+        # 'scheduler': 'CosineAnnealingWarmRestarts',
+        # 'T_0': 30,
+        # 'T_mult': 1,
+        # 'eta_min': 1e-6,
 
         # Checkpoint configuration
         'pretrained_path': None,  # Set to path string to load pretrained model, None to skip
@@ -102,7 +108,7 @@ def get_evaluation_config():
 
         # Evaluation settings
         'batch_size': 4,
-        'confidence_threshold': 0.26,  # LOWERED from 0.25 for small model
+        'confidence_threshold': 0.2,  # LOWERED from 0.25 for small model
         'checkpoint_path': 'checkpoints/epoch_best.pt',  # Path to trained model
 
         # Visualization
