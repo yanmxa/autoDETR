@@ -133,39 +133,50 @@ Each Phase document must follow this 6-part logic:
 - Reducing to 1+1 causes **-85% performance collapse** (Phase 3)
 - 256 hidden dim required for attention mechanism
 
-### 2. Multi-parameter Tuning is Risky
+### 2. LR Scheduler Matters Significantly ⭐ NEW
+
+- **ReduceLROnPlateau > CosineAnnealing** for small datasets (Phase 5)
+- Phase 5: **Test Loss 3.97** (19% better than Phase 2's 4.90)
+- Adaptive scheduling crucial for extracting maximum performance from limited data
+- **Single-variable isolation proved value** (Phase 5 vs Phase 4)
+
+### 3. Multi-parameter Tuning is Risky
 
 - Phase 4 changed 5 parameters → **worse than Phase 2**
-- Single-focus optimization (Phase 1, 2) more effective
-- Phase 2 already near-optimal for small dataset
+- Phase 5 changed ONLY scheduler → **best performance ever**
+- Single-focus optimization (Phase 1, 2, 5) more effective
+- Scientific method (isolate variables) is essential
 
-### 3. Data is the Bottleneck
+### 4. Data is Still the Bottleneck
 
 - 85 samples = **~28 images/class** (far below industry standard)
 - Industry minimum: **100-500 images/class**
-- Algorithmic optimization reached ceiling at ~4.5-5.0 test loss
-- **Production quality requires more data**
+- Algorithmic optimization reached ceiling at ~3.5-4.0 test loss
+- **Production quality (< 2.0) still requires more data**
 
 ---
 
-## ✅ Recommended Configuration (Phase 2)
+## ✅ Recommended Configuration (Phase 5) ⭐
 
 ```python
 config = {
-    # Architecture
+    # Architecture (from Phase 2)
     'num_encoder_layers': 2,
     'num_decoder_layers': 2,
     'hidden_dim': 256,
     'num_queries': 100,
     'dropout': 0.1,
 
-    # Training
+    # Training (improved scheduler)
     'learning_rate': 1e-4,
     'batch_size': 4,
-    'epochs': 100,
-    'scheduler': 'CosineAnnealingWarmRestarts',
+    'epochs': 120,
+    'scheduler': 'ReduceLROnPlateau',  # ⭐ KEY IMPROVEMENT
+    'patience': 10,
+    'lr_factor': 0.5,
+    'min_lr': 1e-6,
 
-    # Loss Weights
+    # Loss Weights (from Phase 2)
     'loss_weights': {
         'class_weighting': 2.0,
         'bbox_weighting': 10.0,
@@ -175,7 +186,7 @@ config = {
 }
 ```
 
-**Performance**: Test Loss 4.90 (best achievable with 85 samples)
+**Performance**: Test Loss **3.97** ⭐ (best achievable with 85 samples)
 
 ---
 
@@ -193,19 +204,22 @@ config = {
 
 ## 🎯 Next Steps
 
-### Option 1: Use Current Best (Phase 2)
+### Option 1: Use Current Best (Phase 5) ⭐
 
-- **Use case**: Demo, proof-of-concept
-- **Performance**: Test Loss 4.90
-- **Limitation**: Not production-ready
+- **Use case**: Demo, proof-of-concept, small dataset applications
+- **Performance**: Test Loss **3.97** (19% better than Phase 2)
+- **Configuration**: Phase 5 (Phase 2 architecture + ReduceLROnPlateau)
+- **Limitation**: Not production-ready (need < 2.0 for production)
 
 ### Option 2: Collect More Data (MANDATORY for Production) ⭐
 
 | Target Samples | Expected Test Loss | Production Ready |
 |----------------|-------------------|------------------|
-| 200 (60-70/class) | 2.5-3.5 | ⚠️ Borderline |
-| **400 (120-140/class)** | **1.8-2.5** | ✅ **Yes** |
-| 600+ | < 1.5 | ✅ Premium |
+| 200 (60-70/class) | 2.0-3.0 | ⚠️ Borderline |
+| **400 (120-140/class)** | **1.5-2.0** | ✅ **Yes** |
+| 600+ | < 1.2 | ✅ Premium |
+
+**Note**: With Phase 5 config, data efficiency improved. Estimates updated based on new baseline (3.97).
 
 **Implementation**:
 
@@ -230,24 +244,42 @@ detr-eval
 For detailed analysis, training logs, and visualizations:
 
 - **[Phase 1: Hyperparameter Tuning](docs/PHASE1_HYPERPARAMETER_TUNING.md)** - Learning rate optimization
-- **[Phase 2: Architecture Upgrade](docs/PHASE2_ARCHITECTURE_UPGRADE.md)** ⭐ - Best configuration
+- **[Phase 2: Architecture Upgrade](docs/PHASE2_ARCHITECTURE_UPGRADE.md)** - Model capacity upgrade (2+2 layers)
 - **[Phase 3: Small Dataset Optimization](docs/PHASE3_SMALL_DATASET_OPT.md)** - Over-simplification failure
-- **[Phase 4: Enhanced Phase 2](docs/PHASE4_ENHANCED_PHASE2.md)** - Multi-parameter tuning
+- **[Phase 4: Enhanced Phase 2](docs/PHASE4_ENHANCED_PHASE2.md)** - Multi-parameter tuning (mixed results)
+- **[Phase 5: Scheduler Optimization](docs/PHASE5_SCHEDULER_OPTIMIZATION.md)** ⭐ - **Best configuration** (single-variable success)
 
 ---
 
 ## 📝 Conclusion
 
-**Phase 2 architecture is optimal for small datasets (85 samples).**
+**Phase 5 (Phase 2 architecture + ReduceLROnPlateau) is optimal for small datasets (85 samples).** ⭐
 
-- ✅ Phases 1-4 exhausted algorithmic optimization
-- ✅ Performance ceiling (~4.5-5.0 loss) confirmed as data limitation
-- ❌ Production quality (< 2.0 loss) requires 400+ samples
-- 🎯 **Data collection is mandatory next step**
+### Key Achievements
 
-> **"You can't train what you don't have data for."** - All optimization phases proved this fundamental truth.
+- ✅ **Phases 1-5 completed**: Systematic algorithmic optimization
+- ✅ **Best Performance**: Test Loss **3.97** (Phase 5)
+  - 43% improvement from baseline (7.0 → 3.97)
+  - 19% improvement from Phase 2 (4.90 → 3.97)
+- ✅ **Performance ceiling identified**: ~3.5-4.0 test loss (data-limited)
+- ✅ **Single-variable principle validated**: Phase 5 success vs Phase 4 failure
+
+### Production Path
+
+- ⚠️ **Current ceiling**: Test Loss 3.97 (excellent for 85 samples)
+- ❌ **Production target**: Test Loss < 2.0 (requires 400+ samples)
+- 🎯 **Gap**: 2x improvement needed → **Data collection mandatory**
+
+### Critical Lessons
+
+1. **LR Scheduler matters** - ReduceLROnPlateau >> CosineAnnealing for small data
+2. **Scientific method works** - Single-variable changes (Phase 5) > Multi-variable (Phase 4)
+3. **Architecture minimums exist** - 2+2 layers required, can't go simpler (Phase 3 proved)
+4. **Data is fundamental** - Algorithm optimization reached ceiling, only data breaks it
+
+> **"Phase 5 proved that proper scheduler selection can extract 19% more performance from the same data. But to reach production quality, more data is non-negotiable."**
 
 ---
 
-**Last Updated**: After 4 optimization phases
-**Status**: Algorithmic optimization complete, data collection required
+**Last Updated**: After 5 optimization phases
+**Status**: ✅ Algorithmic optimization complete (Phase 5 is optimal), 🎯 Data collection next
