@@ -9,10 +9,10 @@ Complete optimization journey from baseline to production-ready configuration.
 | Item | Value |
 |------|-------|
 | **Dataset Size** | 85 images (29/28/28 per class) |
-| **Total Phases** | 4 optimization attempts |
-| **Best Configuration** | Phase 2 (2+2 layers, 256 dim, 100 epochs) |
-| **Best Performance** | Test Loss 4.90 |
-| **Performance Ceiling** | ~4.5-5.0 test loss (data-limited) |
+| **Total Phases** | 5 optimization attempts |
+| **Best Configuration** | Phase 5 (Phase 2 + ReduceLROnPlateau) |
+| **Best Performance** | Test Loss **3.97** ⭐ |
+| **Performance Ceiling** | ~3.5-4.0 test loss (data-limited) |
 | **Production Target** | Test Loss < 2.0 |
 | **Conclusion** | ⚠️ **Data collection mandatory for production** |
 
@@ -24,15 +24,16 @@ Complete optimization journey from baseline to production-ready configuration.
 |-------|-------------------|-------------|-----------|--------|
 | **Baseline** | Starting point | 1+1 layers, lr=1e-5 | 7.0 | ❌ Baseline |
 | **[Phase 1](docs/PHASE1_HYPERPARAMETER_TUNING.md)** | Learning Rate | 1e-5 → 1e-4 | 7.0 | ⚠️ No improvement |
-| **[Phase 2](docs/PHASE2_ARCHITECTURE_UPGRADE.md)** ⭐ | Model Capacity | 1+1 → 2+2 layers | **4.90** | ✅ **BEST** |
+| **[Phase 2](docs/PHASE2_ARCHITECTURE_UPGRADE.md)** | Model Capacity | 1+1 → 2+2 layers | 4.90 | ✅ Major improvement |
 | **[Phase 3](docs/PHASE3_SMALL_DATASET_OPT.md)** | Simplification | Reduce to 1+1, 128 dim | 9.06 | ❌ Failed (-85%) |
 | **[Phase 4](docs/PHASE4_ENHANCED_PHASE2.md)** | Multi-parameter | 5 params changed | 5.81 | ⚠️ Worse than Phase 2 |
+| **[Phase 5](docs/PHASE5_SCHEDULER_OPTIMIZATION.md)** ⭐ | LR Scheduler | Cosine → Plateau | **3.97** | ✅ **BEST** +19% |
 
 **Timeline**:
 
 ```text
-Baseline → Phase 1 → Phase 2 → Phase 3 → Phase 4
- (7.0)     (7.0)    (4.90)✅   (9.06)❌   (5.81)⚠️
+Baseline → Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 5
+ (7.0)     (7.0)    (4.90)     (9.06)❌   (5.81)⚠️  (3.97)✅ BEST
 ```
 
 ---
@@ -45,9 +46,10 @@ Baseline → Phase 1 → Phase 2 → Phase 3 → Phase 4
 |-------|---------|---------|------------|---------|---------|
 | Baseline | 1 | 1 | 256 | 100 | 0.1 |
 | Phase 1 | 1 | 1 | 256 | 100 | 0.1 |
-| **Phase 2** ⭐ | **2** | **2** | **256** | **100** | **0.1** |
+| Phase 2 | 2 | 2 | 256 | 100 | 0.1 |
 | Phase 3 | 1 | 1 | 128 | 25 | 0.3 |
 | Phase 4 | 2 | 2 | 256 | 50 | 0.2 |
+| **Phase 5** ⭐ | **2** | **2** | **256** | **100** | **0.1** |
 
 ### Training Hyperparameters
 
@@ -55,9 +57,10 @@ Baseline → Phase 1 → Phase 2 → Phase 3 → Phase 4
 |-------|----|--------|-----------|------------|
 | Baseline | 1e-5 | 50 | Cosine | 4 |
 | Phase 1 | 1e-4 | 50 | Cosine | 4 |
-| **Phase 2** ⭐ | **1e-4** | **100** | **Cosine** | **4** |
+| Phase 2 | 1e-4 | 100 | Cosine | 4 |
 | Phase 3 | 1e-4 | 100 | Cosine | 4 |
 | Phase 4 | 1e-4 | 120 | Plateau | 4 |
+| **Phase 5** ⭐ | **1e-4** | **120** | **Plateau** | **4** |
 
 ### Loss Weights
 
@@ -65,9 +68,10 @@ Baseline → Phase 1 → Phase 2 → Phase 3 → Phase 4
 |-------|---------------|---------|------|----------|
 | Baseline | 1.0 | 5.0 | 2.0 | 0.1 |
 | Phase 1 | 1.0 | 5.0 | 2.0 | 0.1 |
-| **Phase 2** ⭐ | **2.0** | **10.0** | **5.0** | **0.02** |
+| Phase 2 | 2.0 | 10.0 | 5.0 | 0.02 |
 | Phase 3 | 2.0 | 15.0 | 8.0 | 0.01 |
 | Phase 4 | 2.0 | 12.5 | 6.5 | 0.015 |
+| **Phase 5** ⭐ | **2.0** | **10.0** | **5.0** | **0.02** |
 
 ---
 
