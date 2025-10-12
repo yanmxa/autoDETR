@@ -295,6 +295,19 @@ def create_training_progress():
     Returns:
         Progress: Configured progress bar object
     """
+    from rich.progress import ProgressColumn
+    from rich.text import Text
+
+    class ConditionalTestLossColumn(ProgressColumn):
+        """Custom column that handles None/0 values for test_loss"""
+        def render(self, task):
+            test_loss = task.fields.get("test_loss", 0)
+            if test_loss is None or test_loss == 0.0:
+                # During training, don't show test loss
+                return Text("")
+            else:
+                return Text(f"• Test Loss: {test_loss:.5f}", style="magenta")
+
     return Progress(
         SpinnerColumn(),
         TextColumn("[bold blue]{task.fields[epoch_info]}", justify="left"),
@@ -302,10 +315,7 @@ def create_training_progress():
         MofNCompleteColumn(),
         TextColumn("•"),
         TextColumn("[cyan]Train Loss: {task.fields[train_loss]:.5f}"),
-        TextColumn("•"),
-        TextColumn("[magenta]Test Loss: {task.fields[test_loss]:.5f}"),
-        TextColumn("•"),
-        TimeRemainingColumn(),
+        ConditionalTestLossColumn(),
         expand=False
     )
 

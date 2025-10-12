@@ -54,6 +54,7 @@ tensorboard/
 data/raw/
 data/test/
 data/train/
+data*
 
 *.jpg
 *.jpeg
@@ -82,3 +83,4 @@ dmypy.json
 .env
 .env.local
 
+training_history.csv

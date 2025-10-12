@@ -9,6 +9,7 @@ __author__ = "Your Name"
 from detr.model import DETR
 from detr.data import DETRDataset, collate_fn
 from detr.loss import DETRLoss, HungarianMatcher, compute_total_loss
+from detr.config import get_model_config, get_training_config, get_evaluation_config
 
 __all__ = [
     "DETR",
@@ -17,4 +18,7 @@ __all__ = [
     "DETRLoss",
     "HungarianMatcher",
     "compute_total_loss",
+    "get_model_config",
+    "get_training_config",
+    "get_evaluation_config",
 ]
