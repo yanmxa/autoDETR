@@ -6,6 +6,8 @@ This script evaluates the trained DETR model on test data and visualizes predict
 
 import torch
 import time
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from pathlib import Path
 from torch.utils.data import DataLoader
@@ -227,7 +229,7 @@ def visualize_predictions(images, batch_indices, classes, probas, bboxes,
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
         print_message(f"[green]✓[/green] Visualization saved to: [cyan]{save_path}[/cyan]")
 
-    plt.show()
+    plt.close()
 
 
 def evaluate_model(config):

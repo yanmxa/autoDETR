@@ -10,6 +10,8 @@ import torch
 from torch import optim
 from torch.utils.data import DataLoader
 from pathlib import Path
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 from detr.data.dataset import DETRDataset, collate_fn
@@ -204,8 +206,7 @@ def plot_loss_curves(epochs_list, train_losses, test_losses, save_path='training
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
     print_message(f"[green]✓[/green] Loss curves saved to: [cyan]{save_path}[/cyan]")
 
-    # Show plot
-    plt.show()
+    plt.close()
 
 
 def main():
