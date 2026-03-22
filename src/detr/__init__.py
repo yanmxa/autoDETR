@@ -1,10 +1,9 @@
 """
-DETR: DEtection TRansformer
-Object detection using Transformer encoder-decoder with ResNet50 backbone
+autoDETR: Automated DETR object detection experimentation platform
+Transformer encoder-decoder with ResNet50 backbone + automated experiment loop
 """
 
-__version__ = "0.1.0"
-__author__ = "Your Name"
+__version__ = "0.2.0"
 
 from detr.model import DETR
 from detr.data import DETRDataset, collate_fn

@@ -30,6 +30,13 @@ logs/
 *.pth
 *.ckpt
 uv.lock
+run.log
+results.tsv
+experiment_history.png
+
+# Exception: track validation visualizations
+!val_results/
+!val_results/*.png
 
 # Testing
 .pytest_cache/

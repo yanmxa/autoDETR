@@ -420,6 +420,12 @@ def main():
     print_message("[bold]Generating loss curves...[/bold]")
     plot_loss_curves(epochs_list, train_losses, test_losses, 'training_curves.png')
 
+    # Run validation and generate visualization
+    print_empty_line()
+    print_message("[bold]Running validation...[/bold]")
+    from detr.validate import run_validation
+    run_validation()
+
 
 if __name__ == '__main__':
     main()

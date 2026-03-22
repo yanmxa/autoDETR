@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "detr"
-version = "0.1.0"
-description = "DETR: DEtection TRansformer for object detection"
+name = "autodetr"
+version = "0.2.0"
+description = "autoDETR: Automated DETR object detection experimentation platform"
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
@@ -47,9 +47,11 @@ dev = [
 ]
 
 [project.scripts]
-detr-collect = "detr.tools.collect_images:main"
-detr-train = "detr.train:main"
-detr-eval = "detr.evaluate:main"
+autodetr-collect = "detr.tools.collect_images:main"
+autodetr-train = "detr.train:main"
+autodetr-eval = "detr.evaluate:main"
+autodetr-val = "detr.validate:main"
+autodetr-plot = "detr.tools.plot_experiments:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
