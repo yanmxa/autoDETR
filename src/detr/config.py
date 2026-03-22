@@ -49,7 +49,7 @@ def get_training_config():
         # Training hyperparameters
         'epochs': 150,
         'batch_size': 4,
-        'learning_rate': 1e-4,
+        'learning_rate': 5e-5,
         'grad_clip_max_norm': 1.0,
 
         # Loss weights
