@@ -65,7 +65,7 @@ class DETRDataset(Dataset):
     def _get_transform(self):
         """Get albumentations transform pipeline."""
         if self.train:
-            # Training augmentations
+            # Training augmentations (PHASE 7.2: Back to Phase 7 baseline - proven stable)
             transform = A.Compose([
                 A.Resize(500, 500),
                 A.RandomCrop(width=self.image_size, height=self.image_size, p=0.33),

@@ -42,14 +42,17 @@ def rescale_bboxes(boxes, img_size):
     return boxes_xyxy
 
 
-def filter_predictions(pred_logits, pred_boxes, confidence_threshold=0.7):
+def filter_predictions(pred_logits, pred_boxes, confidence_threshold=0.7, top_k=None):
     """
-    Filter predictions based on confidence threshold.
+    Filter predictions based on confidence threshold and optionally select top-k.
 
     Args:
         pred_logits: Predicted class logits [batch, num_queries, num_classes+1]
         pred_boxes: Predicted boxes [batch, num_queries, 4]
         confidence_threshold: Minimum confidence score
+        top_k: If specified, keep only top-k highest confidence detections per image
+               If 1, only the highest confidence detection per image is kept
+               If None, all detections above threshold are kept
 
     Returns:
         Tuple of (batch_indices, query_indices, classes, probas, boxes)
@@ -69,11 +72,62 @@ def filter_predictions(pred_logits, pred_boxes, confidence_threshold=0.7):
     classes = max_classes[batch_indices, query_indices]
     probas = max_probs[batch_indices, query_indices]
 
+    # Apply top-k filtering if specified
+    if top_k is not None and top_k > 0:
+        batch_size = pred_logits.shape[0]
+
+        # Process each image separately
+        new_batch_indices = []
+        new_query_indices = []
+        new_classes = []
+        new_probas = []
+        new_bboxes = []
+
+        for batch_idx in range(batch_size):
+            # Get detections for this image
+            img_mask = batch_indices == batch_idx
+            img_probas = probas[img_mask]
+
+            if len(img_probas) == 0:
+                continue
+
+            # Get top-k highest confidence detections
+            k = min(top_k, len(img_probas))
+            top_k_indices = torch.topk(img_probas, k).indices
+
+            # Collect top-k detections
+            img_batch_indices = batch_indices[img_mask][top_k_indices]
+            img_query_indices = query_indices[img_mask][top_k_indices]
+            img_classes = classes[img_mask][top_k_indices]
+            img_probas_topk = img_probas[top_k_indices]
+            img_bboxes = bboxes[img_mask][top_k_indices]
+
+            new_batch_indices.append(img_batch_indices)
+            new_query_indices.append(img_query_indices)
+            new_classes.append(img_classes)
+            new_probas.append(img_probas_topk)
+            new_bboxes.append(img_bboxes)
+
+        # Concatenate results
+        if new_batch_indices:
+            batch_indices = torch.cat(new_batch_indices)
+            query_indices = torch.cat(new_query_indices)
+            classes = torch.cat(new_classes)
+            probas = torch.cat(new_probas)
+            bboxes = torch.cat(new_bboxes)
+        else:
+            # No detections
+            batch_indices = torch.tensor([], dtype=torch.long)
+            query_indices = torch.tensor([], dtype=torch.long)
+            classes = torch.tensor([], dtype=torch.long)
+            probas = torch.tensor([], dtype=torch.float32)
+            bboxes = torch.tensor([], dtype=torch.float32).reshape(0, 4)
+
     return batch_indices, query_indices, classes, probas, bboxes
 
 
 def visualize_predictions(images, batch_indices, classes, probas, bboxes,
-                         class_names, img_size, save_path=None):
+                         class_names, img_size, save_path=None, top_k=None):
     """
     Visualize model predictions on images.
 
@@ -86,10 +140,30 @@ def visualize_predictions(images, batch_indices, classes, probas, bboxes,
         class_names: List of class names
         img_size: Original image size (H, W)
         save_path: Optional path to save visualization
+        top_k: If specified, indicates top-k filtering was applied
     """
+    import math
+
     num_images = len(images)
-    fig, axes = plt.subplots(2, 2, figsize=(12, 12))
-    axes = axes.flatten()
+
+    # Calculate optimal grid layout
+    # Try to make grid as square as possible
+    cols = math.ceil(math.sqrt(num_images))
+    rows = math.ceil(num_images / cols)
+
+    # Create figure with dynamic size
+    fig_width = min(cols * 4, 20)  # Max 20 inches wide
+    fig_height = min(rows * 4, 20)  # Max 20 inches tall
+
+    fig, axes = plt.subplots(rows, cols, figsize=(fig_width, fig_height))
+
+    # Handle single row/column case
+    if num_images == 1:
+        axes = [axes]
+    elif rows == 1 or cols == 1:
+        axes = axes.flatten()
+    else:
+        axes = axes.flatten()
 
     for idx, (img, ax) in enumerate(zip(images, axes)):
         if idx >= num_images:
@@ -133,7 +207,19 @@ def visualize_predictions(images, batch_indices, classes, probas, bboxes,
                 )
                 num_detections += 1
 
-        ax.set_title(f'Image {idx + 1} - {num_detections} detections', fontsize=12)
+        # Create title based on filtering mode
+        if top_k == 1:
+            title = f'Image {idx + 1} - Highest confidence only'
+        elif top_k is not None:
+            title = f'Image {idx + 1} - Top-{top_k} ({num_detections} det.)'
+        else:
+            title = f'Image {idx + 1} - {num_detections} detections'
+        ax.set_title(title, fontsize=12)
+
+    # Hide unused subplots
+    total_subplots = rows * cols
+    for idx in range(num_images, total_subplots):
+        axes[idx].axis('off')
 
     plt.tight_layout()
 
@@ -196,34 +282,62 @@ def evaluate_model(config):
     print_message(f"[green]✓[/green] Model ready on device: [yellow]{device}[/yellow]")
     print_empty_line()
 
-    # Get a batch of test data
-    print_message("[bold]Running inference on test batch...[/bold]")
-    images, targets = next(iter(test_dataloader))
-    images = images.to(device)
+    # Collect images to evaluate
+    num_images = config.get('num_images', 4)
+    batches_needed = (num_images + config['batch_size'] - 1) // config['batch_size']
 
-    # Run inference
+    print_message(f"[bold]Collecting {num_images} images ({batches_needed} batch(es))...[/bold]")
+
+    all_images = []
+    all_predictions = []
+
     start_time = time.time()
     with torch.no_grad():
-        predictions = model(images)
+        for batch_idx, (images, targets) in enumerate(test_dataloader):
+            if batch_idx >= batches_needed:
+                break
+
+            images = images.to(device)
+            predictions = model(images)
+
+            all_images.append(images)
+            all_predictions.append(predictions)
+
     inference_time = (time.time() - start_time) * 1000  # Convert to ms
 
-    print_message(f"[green]✓[/green] Inference completed in [yellow]{inference_time:.2f}ms[/yellow]")
-    print_message(f"[blue]ℹ[/blue] Avg time per image: [yellow]{inference_time/config['batch_size']:.2f}ms[/yellow]")
+    # Concatenate all batches
+    images = torch.cat(all_images, dim=0)[:num_images]  # Trim to exact number
+    pred_logits = torch.cat([p['pred_logits'] for p in all_predictions], dim=0)[:num_images]
+    pred_boxes = torch.cat([p['pred_boxes'] for p in all_predictions], dim=0)[:num_images]
+
+    predictions = {
+        'pred_logits': pred_logits,
+        'pred_boxes': pred_boxes
+    }
+
+    print_message(f"[green]✓[/green] Inference completed on {len(images)} images in [yellow]{inference_time:.2f}ms[/yellow]")
+    print_message(f"[blue]ℹ[/blue] Avg time per image: [yellow]{inference_time/len(images):.2f}ms[/yellow]")
     print_empty_line()
 
     # Filter predictions
-    print_message(f"[bold]Filtering predictions (threshold: {config['confidence_threshold']})...[/bold]")
+    top_k = config.get('top_k', None)
+    if top_k is not None:
+        print_message(f"[bold]Filtering predictions (threshold: {config['confidence_threshold']}, top-{top_k} per image)...[/bold]")
+    else:
+        print_message(f"[bold]Filtering predictions (threshold: {config['confidence_threshold']})...[/bold]")
+
     batch_indices, query_indices, classes, probas, bboxes = filter_predictions(
         predictions['pred_logits'],
         predictions['pred_boxes'],
-        confidence_threshold=config['confidence_threshold']
+        confidence_threshold=config['confidence_threshold'],
+        top_k=top_k
     )
 
     # Rescale boxes to image coordinates
     img_size = (config.get('image_size', 224), config.get('image_size', 224))
     bboxes_scaled = rescale_bboxes(bboxes, img_size)
 
-    print_message(f"[green]✓[/green] Found [yellow]{len(classes)}[/yellow] detections across [yellow]{config['batch_size']}[/yellow] images")
+    print_message(f"[green]✓[/green] Found [yellow]{len(classes)}[/yellow] detections across [yellow]{len(images)}[/yellow] images")
     print_empty_line()
 
     # Print detection details
@@ -254,7 +368,8 @@ def evaluate_model(config):
         bboxes_scaled.cpu(),
         class_names,
         img_size,
-        save_path=config['save_path']
+        save_path=config['save_path'],
+        top_k=top_k
     )
 
     print_message("\n[bold green]✓ Evaluation complete![/bold green]\n")

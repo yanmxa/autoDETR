@@ -165,7 +165,7 @@ def main():
     classes = ['one', 'two', 'three']
 
     # Initialize capture system (camera_id=0 for built-in camera)
-    cap = CaptureImages('./data/raw/test1', classes, camera_id=0)
+    cap = CaptureImages('./data/raw', classes, camera_id=0)
 
     # Run capture session
     cap.run(sleep_time=2, num_images=30)
