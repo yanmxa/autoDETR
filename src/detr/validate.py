@@ -2,11 +2,11 @@
 autoDETR Validation Script
 
 Runs validation on a fixed set of test images, computes metrics (val_loss, accuracy,
-mean_iou), and generates a 2x5 grid visualization of predictions.
+mean_iou), and optionally generates a 2x5 grid visualization of predictions.
 
 Usage:
-    autodetr-val                    # use git branch as tag
-    autodetr-val --tag baseline     # explicit tag
+    autodetr-val                        # metrics only (no image saved)
+    autodetr-val --tag baseline         # metrics + save val_results/val_baseline_01.png
 """
 
 import argparse
@@ -30,20 +30,24 @@ CLASS_NAMES = ['one', 'two', 'three']
 NUM_VAL_IMAGES = 10
 
 
-def get_git_branch():
-    """Get current git branch name as default tag."""
-    try:
-        result = subprocess.run(
-            ['git', 'rev-parse', '--abbrev-ref', 'HEAD'],
-            capture_output=True, text=True, timeout=5
-        )
-        branch = result.stdout.strip()
-        # Convert autodetr/mar22 -> mar22
-        if '/' in branch:
-            branch = branch.split('/')[-1]
-        return branch or 'unknown'
-    except Exception:
-        return 'unknown'
+def get_next_experiment_number(tag, save_dir='val_results'):
+    """Get the next sequential number for a given tag by scanning existing files."""
+    save_dir = Path(save_dir)
+    if not save_dir.exists():
+        return 1
+    # Match files like val_<tag>_01.png, val_<tag>_02.png
+    existing = list(save_dir.glob(f'val_{tag}_*.png'))
+    if not existing:
+        return 1
+    numbers = []
+    for f in existing:
+        # Extract number from end: val_baseline_03.png -> 03
+        last_part = f.stem.rsplit('_', 1)[-1]
+        try:
+            numbers.append(int(last_part))
+        except ValueError:
+            pass
+    return max(numbers) + 1 if numbers else 1
 
 
 def compute_accuracy_and_iou(predictions, targets, matcher):
@@ -190,10 +194,13 @@ def generate_val_visualization(images, predictions, targets, config, tag, save_d
     for idx in range(n, rows * cols):
         axes[idx].axis('off')
 
-    fig.suptitle(f'Validation: {tag}', fontsize=14, fontweight='bold')
+    num = get_next_experiment_number(tag, str(save_dir))
+    filename = f'val_{tag}_{num:02d}.png'
+
+    fig.suptitle(f'{tag} #{num:02d}', fontsize=14, fontweight='bold')
     plt.tight_layout()
 
-    save_path = save_dir / f'val_{tag}.png'
+    save_path = save_dir / filename
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
     plt.close(fig)
 
@@ -205,14 +212,13 @@ def run_validation(tag=None, quiet=False):
     Run full validation pipeline.
 
     Args:
-        tag: experiment tag (defaults to git branch)
+        tag: experiment tag. If provided, saves visualization to val_results/val_<num>_<tag>.png.
+             If None, only computes and prints metrics (no image saved).
         quiet: if True, suppress print output
 
     Returns:
         dict with val_loss, accuracy, mean_iou, num_detections, save_path
     """
-    if tag is None:
-        tag = get_git_branch()
 
     config = get_evaluation_config()
     model_config = get_model_config()
@@ -305,18 +311,19 @@ def run_validation(tag=None, quiet=False):
             max_probs, _ = probs.max(-1)
             num_detections += (max_probs > threshold).sum().item()
 
-    # 3. Generate visualization on fixed 10 images
-    with torch.no_grad():
-        val_images, val_targets = next(iter(val_loader))
-        val_images = val_images.to(device)
-        val_targets_dev = [{k: v.to(device) for k, v in t.items()} for t in val_targets]
-        val_preds = model(val_images)
+    # 3. Generate visualization only when tag is provided (i.e., a "keep" experiment)
+    save_path = None
+    if tag is not None:
+        with torch.no_grad():
+            val_images, val_targets = next(iter(val_loader))
+            val_images = val_images.to(device)
+            val_preds = model(val_images)
 
-    save_path = generate_val_visualization(
-        val_images.cpu(),
-        {k: v.cpu() for k, v in val_preds.items()},
-        val_targets, config, tag
-    )
+        save_path = generate_val_visualization(
+            val_images.cpu(),
+            {k: v.cpu() for k, v in val_preds.items()},
+            val_targets, config, tag
+        )
 
     # 4. Print structured output
     results = {
@@ -325,7 +332,7 @@ def run_validation(tag=None, quiet=False):
         'mean_iou': mean_iou,
         'num_detections': num_detections,
         'confidence_threshold': threshold,
-        'experiment_tag': tag,
+        'experiment_tag': tag or 'n/a',
         'save_path': save_path,
     }
 
@@ -336,8 +343,8 @@ def run_validation(tag=None, quiet=False):
         print(f"mean_iou:         {mean_iou:.4f}")
         print(f"num_detections:   {num_detections}")
         print(f"confidence_threshold: {threshold}")
-        print(f"experiment_tag:   {tag}")
-        print(f"val_image:        {save_path}")
+        if save_path:
+            print(f"val_image:        {save_path}")
         print("---")
 
     return results

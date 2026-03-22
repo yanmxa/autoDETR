@@ -420,11 +420,11 @@ def main():
     print_message("[bold]Generating loss curves...[/bold]")
     plot_loss_curves(epochs_list, train_losses, test_losses, 'training_curves.png')
 
-    # Run validation and generate visualization
+    # Run validation (metrics only, no image — use autodetr-val --tag <name> to save image)
     print_empty_line()
     print_message("[bold]Running validation...[/bold]")
     from detr.validate import run_validation
-    run_validation()
+    run_validation()  # tag=None → metrics only, no visualization saved
 
 
 if __name__ == '__main__':

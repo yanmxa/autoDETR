@@ -31,21 +31,22 @@ Edit config.py/train.py
 git commit -s
     |
     v
-autodetr-train > run.log 2>&1
+autodetr-train > run.log 2>&1    -->  metrics printed at end
     |
     v
-autodetr-val --tag <name>     -->  val_results/val_<name>.png
+grep results from run.log
     |
     v
 Record in results.tsv
     |
     v
-Keep (advance) or Discard (git reset)
+Improved? --yes--> autodetr-val --tag <tag>  -->  val_results/val_<tag>_01.png
+           |                                       (auto-incrementing number)
+           no---> git reset --hard HEAD~1
 ```
 
-Each validation run produces:
-- **Metrics**: val_loss, accuracy, mean_iou, num_detections (grep-friendly format)
-- **Visualization**: 2x5 grid of test images with GT boxes (blue) and predictions (green)
+- **Training** auto-prints metrics (val_loss, accuracy, mean_iou) at the end
+- **Validation image** (2x5 grid with GT blue + prediction green) saved only on improvement
 - **History plot**: `autodetr-plot` charts accuracy/loss/IoU across all experiments
 
 ## Commands
@@ -53,7 +54,7 @@ Each validation run produces:
 | Command | Description |
 |---------|-------------|
 | `autodetr-train` | Train model, auto-runs validation at end |
-| `autodetr-val` | Run validation on test set, save visualization |
+| `autodetr-val` | Compute metrics; with `--tag <name>` also saves visualization |
 | `autodetr-eval` | Interactive evaluation with visualization |
 | `autodetr-plot` | Plot experiment history from results.tsv |
 | `autodetr-collect` | Capture training images from webcam |
@@ -64,9 +65,9 @@ Each validation run produces:
 autoDETR/
 ├── program.md              # Experiment protocol
 ├── results.tsv             # Experiment log (not tracked by git)
-├── val_results/            # Validation visualizations (tracked by git)
-│   ├── val_baseline.png
-│   └── val_<tag>.png
+├── val_results/            # Validation visualizations (not tracked)
+│   ├── val_baseline_01.png
+│   └── val_<tag>_02.png
 ├── src/detr/
 │   ├── config.py           # Centralized configuration (editable)
 │   ├── train.py            # Training loop (editable)
@@ -87,6 +88,7 @@ autoDETR/
 
 ## Validation Output
 
+After training:
 ```
 ---
 val_loss:         2.345678
@@ -94,9 +96,12 @@ accuracy:         0.7500
 mean_iou:         0.6234
 num_detections:   8
 confidence_threshold: 0.10
-experiment_tag:   baseline
-val_image:        val_results/val_baseline.png
 ---
+```
+
+After `autodetr-val --tag baseline`:
+```
+val_image:        val_results/val_baseline_01.png
 ```
 
 ## Current Baseline

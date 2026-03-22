@@ -39,26 +39,27 @@ LOOP FOREVER:
 1. Look at the current git state and `results.tsv` history.
 2. Decide on an experimental change to `config.py` and/or `train.py`.
 3. `git commit -s` the change with a descriptive message.
-4. Run the experiment:
+4. Run the experiment (training ends with metrics output automatically):
    ```bash
    autodetr-train > run.log 2>&1
    ```
-5. Run validation to get metrics:
-   ```bash
-   autodetr-val --tag <experiment_name> 2>&1 | tee -a run.log
-   ```
-6. Read out the results:
+5. Read out the results:
    ```bash
    grep "^val_loss:\|^accuracy:\|^mean_iou:\|^num_detections:" run.log
    ```
-7. If grep output is empty, the run crashed. Run `tail -n 50 run.log` to read the stack trace and attempt a fix.
-8. Record the results in `results.tsv` (do NOT commit this file).
-9. **If accuracy improved** (higher) or val_loss improved (lower): keep the commit, advance the branch.
-10. **If results are equal or worse**: `git reset --hard HEAD~1` to revert.
+6. If grep output is empty, the run crashed. Run `tail -n 50 run.log` to read the stack trace and attempt a fix.
+7. Record the results in `results.tsv` (do NOT commit this file).
+8. **If accuracy improved** (higher) or val_loss improved (lower):
+   - Keep the commit, advance the branch.
+   - Save a validation snapshot: `autodetr-val --tag <short_tag>`
+   - This saves `val_results/val_<tag>_<number>.png` with auto-incrementing number per tag.
+9. **If results are equal or worse**: `git reset --hard HEAD~1` to revert.
 
 ## Output Format
 
 After validation, `autodetr-val` prints a summary:
+
+Training automatically prints metrics at the end:
 
 ```
 ---
@@ -67,11 +68,11 @@ accuracy:         0.7500
 mean_iou:         0.6234
 num_detections:   8
 confidence_threshold: 0.10
-experiment_tag:   baseline
 ---
 ```
 
-The validation visualization (10 images with predictions) is saved to `val_results/val_<tag>.png`.
+When you run `autodetr-val --tag baseline` to save a snapshot, it also saves a visualization:
+`val_results/val_baseline_01.png` (number auto-increments per tag: 01, 02, 03, ...)
 
 ## Logging Results
 
