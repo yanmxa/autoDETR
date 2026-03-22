@@ -63,8 +63,8 @@ def get_training_config():
         # Optimizer and scheduler
         'optimizer': 'Adam',
         'scheduler': 'ReduceLROnPlateau',
-        'patience': 10,
-        'lr_factor': 0.3,
+        'patience': 15,
+        'lr_factor': 0.5,
         'min_lr': 5e-7,
 
         # Checkpoint configuration
