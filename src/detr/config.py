@@ -56,7 +56,7 @@ def get_training_config():
         'loss_weights': {
             'class_weighting': 8.0,
             'bbox_weighting': 6.0,
-            'giou_weighting': 1.5,
+            'giou_weighting': 1.25,
         },
         'eos_coef': 0.1,
 
