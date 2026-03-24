@@ -49,22 +49,22 @@ def get_training_config():
         # Training hyperparameters
         'epochs': 150,
         'batch_size': 4,
-        'learning_rate': 1e-4,
+        'learning_rate': 5e-5,
         'grad_clip_max_norm': 1.0,
 
         # Loss weights
         'loss_weights': {
-            'class_weighting': 2.0,
-            'bbox_weighting': 10.0,
-            'giou_weighting': 5.0,
+            'class_weighting': 8.0,
+            'bbox_weighting': 6.0,
+            'giou_weighting': 1.25,
         },
         'eos_coef': 0.1,
 
         # Optimizer and scheduler
         'optimizer': 'Adam',
         'scheduler': 'ReduceLROnPlateau',
-        'patience': 10,
-        'lr_factor': 0.3,
+        'patience': 15,
+        'lr_factor': 0.5,
         'min_lr': 5e-7,
 
         # Checkpoint configuration

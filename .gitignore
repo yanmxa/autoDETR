@@ -23,6 +23,7 @@ logs/
 
 # Training outputs
 *.png
+!docs/*.png
 *.jpg
 *.jpeg
 *.csv
@@ -32,7 +33,7 @@ logs/
 uv.lock
 run.log
 results.tsv
-experiment_history.png
+/experiment_history.png
 val_results/
 
 # Testing
