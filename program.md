@@ -111,26 +111,6 @@ All else being equal, simpler is better. A small improvement that adds ugly comp
 - 0.01 accuracy improvement from deleting code? Definitely keep.
 - Same accuracy but simpler code? Keep.
 
-## Current Configuration (Baseline)
-
-| Parameter | Value |
-|-----------|-------|
-| Classes | 3 (one, two, three) |
-| Encoder layers | 1 |
-| Decoder layers | 1 |
-| Object queries | 25 |
-| Hidden dim | 256 |
-| Attention heads | 8 |
-| Dropout | 0.2 |
-| Epochs | 150 |
-| Batch size | 4 |
-| Learning rate | 1e-4 |
-| Optimizer | Adam |
-| Scheduler | ReduceLROnPlateau |
-| Loss weights | class=2.0, bbox=10.0, giou=5.0 |
-| Training samples | 170 |
-| Test samples | 32 |
-
 ## Commands
 
 | Command | Description |
