@@ -14,14 +14,6 @@ After 49 automated experiments, the best model achieves:
 | Classification Accuracy | **96.9%** |
 | Mean IoU | **0.762** |
 
-### Detection Examples
-
-<p align="center">
-  <img src="docs/detection_results.png" alt="Detection results on test set" width="100%">
-</p>
-
-> 10 test images with ground truth (blue, dashed) and predictions (green, solid). The model detects hand gestures for classes: **one**, **two**, **three**.
-
 ### Training Curves
 
 <p align="center">
