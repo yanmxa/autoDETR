@@ -1,129 +1,101 @@
 # autoDETR
 
-Automated experimentation platform for DETR (DEtection TRansformer) object detection. Inspired by [karpathy/autoresearch](https://github.com/karpathy/autoresearch).
+Automated hyperparameter search for DETR object detection. An LLM autonomously iterates on training configuration — modifying, training, evaluating, and keeping or reverting each change — to maximize detection accuracy.
 
-Train, validate, iterate. Each experiment produces metrics and a visual snapshot, so you can track exactly how changes affect detection quality.
+Inspired by [karpathy/autoresearch](https://github.com/karpathy/autoresearch).
 
-## Quick Start
+## Results
+
+After 49 automated experiments, the best model achieves:
+
+| Metric | Value |
+|--------|-------|
+| Validation Loss | **0.999** |
+| Classification Accuracy | **96.9%** |
+| Mean IoU | **0.762** |
+
+### Detection Examples
+
+<p align="center">
+  <img src="docs/detection_results.png" alt="Detection results on test set" width="100%">
+</p>
+
+> 10 test images with ground truth (blue, dashed) and predictions (green, solid). The model detects hand gestures for classes: **one**, **two**, **three**.
+
+### Training Curves
+
+<p align="center">
+  <img src="docs/training_curves.png" alt="Training and test loss curves" width="80%">
+</p>
+
+### Experiment History
+
+<p align="center">
+  <img src="docs/experiment_history.png" alt="49 experiments showing accuracy, loss, and IoU progression" width="80%">
+</p>
+
+> Green = kept, Red = discarded, Yellow = best. Each bar is one experiment; the black line shows the running trend.
+
+## Architecture
+
+- **Backbone**: ResNet-50 (pretrained on ImageNet)
+- **Transformer**: 1 encoder + 1 decoder layer, 8 attention heads, hidden dim 256
+- **Detection head**: 25 object queries, 3 object classes + background
+- **Loss**: Hungarian matching with weighted CE + L1 + GIoU
+
+## Configuration
+
+| Parameter | Value |
+|-----------|-------|
+| Learning rate | 5e-5 |
+| Optimizer | Adam |
+| Scheduler | ReduceLROnPlateau (patience=15, factor=0.5) |
+| Loss weights | class=8.0, bbox=6.0, giou=1.25 |
+| Epochs | 150 |
+| Batch size | 4 |
+| Dropout | 0.2 |
+| Dataset | 170 train / 32 test images |
+
+## Setup
 
 ```bash
-# Install
 pip install -e .
-
-# 1. Run baseline training
-autodetr-train
-
-# 2. Validate and generate visualization
-autodetr-val --tag baseline
-
-# 3. Plot experiment history
-autodetr-plot
 ```
-
-## Experiment Workflow
-
-See [program.md](program.md) for the full experiment protocol.
-
-```
-Edit config.py/train.py
-    |
-    v
-git commit -s
-    |
-    v
-autodetr-train > run.log 2>&1    -->  metrics printed at end
-    |
-    v
-grep results from run.log
-    |
-    v
-Record in results.tsv
-    |
-    v
-Improved? --yes--> autodetr-val --tag <tag>  -->  val_results/val_<tag>_01.png
-           |                                       (auto-incrementing number)
-           no---> git reset --hard HEAD~1
-```
-
-- **Training** auto-prints metrics (val_loss, accuracy, mean_iou) at the end
-- **Validation image** (2x5 grid with GT blue + prediction green) saved only on improvement
-- **History plot**: `autodetr-plot` charts accuracy/loss/IoU across all experiments
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `autodetr-train` | Train model, auto-runs validation at end |
-| `autodetr-val` | Compute metrics; with `--tag <name>` also saves visualization |
-| `autodetr-eval` | Interactive evaluation with visualization |
+| `autodetr-train` | Train model (auto-validates at end) |
+| `autodetr-val --tag <name>` | Run validation and save visualization |
+| `autodetr-eval` | Evaluation with visualization |
 | `autodetr-plot` | Plot experiment history from results.tsv |
 | `autodetr-collect` | Capture training images from webcam |
+
+## Experiment Protocol
+
+See [program.md](program.md) for the full autonomous experiment loop protocol. The key loop:
+
+```
+modify config.py → git commit → train → evaluate → keep or revert
+```
+
+Each experiment is a git commit. Improvements are kept; regressions are reverted with `git reset --hard HEAD~1`. Results are logged in `results.tsv` (not tracked by git).
 
 ## Project Structure
 
 ```
-autoDETR/
-├── program.md              # Experiment protocol
-├── results.tsv             # Experiment log (not tracked by git)
-├── val_results/            # Validation visualizations (not tracked)
-│   ├── val_baseline_01.png
-│   └── val_<tag>_02.png
-├── src/detr/
-│   ├── config.py           # Centralized configuration (editable)
-│   ├── train.py            # Training loop (editable)
-│   ├── validate.py         # Validation harness (read-only)
-│   ├── evaluate.py         # Interactive evaluation
-│   ├── model/              # DETR architecture (read-only)
-│   ├── loss/               # Loss functions (read-only)
-│   ├── data/               # Dataset loader (read-only)
-│   ├── utils/              # Display utilities
-│   └── tools/              # Data collection & plotting
-├── data/
-│   ├── raw/                # Original captured images
-│   ├── process/            # Labeled dataset (images + labels)
-│   ├── train/              # Training split (170 samples)
-│   └── test/               # Test split (32 samples)
-└── checkpoints/            # Model weights
+src/detr/
+├── config.py        # Hyperparameters (editable)
+├── train.py         # Training loop (editable)
+├── validate.py      # Validation metrics
+├── evaluate.py      # Interactive evaluation
+├── model/           # DETR architecture (ResNet-50 + Transformer)
+├── loss/            # Hungarian matching + CE + L1 + GIoU
+├── data/            # Dataset and augmentations
+└── tools/           # Data collection, plotting, utilities
 ```
-
-## Validation Output
-
-After training:
-```
----
-val_loss:         2.345678
-accuracy:         0.7500
-mean_iou:         0.6234
-num_detections:   8
-confidence_threshold: 0.10
----
-```
-
-After `autodetr-val --tag baseline`:
-```
-val_image:        val_results/val_baseline_01.png
-```
-
-## Current Baseline
-
-| Parameter | Value |
-|-----------|-------|
-| Classes | 3 (one, two, three) |
-| Encoder/Decoder layers | 1+1 |
-| Object queries | 25 |
-| Hidden dim | 256 |
-| Epochs | 150 |
-| Learning rate | 1e-4 |
-| Batch size | 4 |
-| Optimizer | Adam |
-| Training samples | 170 |
-
-## Requirements
-
-- Python >= 3.12
-- PyTorch >= 2.0.0
-- torchvision, albumentations, rich, matplotlib
 
 ## License
 
-MIT License
+MIT
