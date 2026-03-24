@@ -35,7 +35,7 @@ After 49 automated experiments, the best model achieves:
 - **Detection head**: 25 object queries, 3 object classes + background
 - **Loss**: Hungarian matching with weighted CE + L1 + GIoU
 
-## Configuration
+## Best Configuration (after 49 experiments)
 
 | Parameter | Value |
 |-----------|-------|
@@ -47,12 +47,6 @@ After 49 automated experiments, the best model achieves:
 | Batch size | 4 |
 | Dropout | 0.2 |
 | Dataset | 170 train / 32 test images |
-
-## Setup
-
-```bash
-pip install -e .
-```
 
 ## Commands
 
