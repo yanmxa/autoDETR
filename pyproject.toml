@@ -52,6 +52,7 @@ autodetr-train = "detr.train:main"
 autodetr-eval = "detr.evaluate:main"
 autodetr-val = "detr.validate:main"
 autodetr-plot = "detr.tools.plot_experiments:main"
+autodetr-server = "detr.server:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
